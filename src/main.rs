@@ -1,9 +1,11 @@
 mod types;
+mod parser;
 
 use types::CellIndex;
 use types::Shape;
 use types::ValueSet;
 use types::Grid;
+use types::FixedValues;
 
 #[derive(Debug)]
 struct House {
@@ -76,18 +78,18 @@ fn enforce_value(grid: &mut Grid, value: ValueSet, cell: CellIndex, cell_conflic
 fn update_cell_order(_stack: &mut Vec<CellIndex>, _depth: usize, _grid: &Grid) {
 }
 
-fn solve(grid: &Grid, shape: &Shape, cell_conflicts: &Vec<CellConflicts>) {
+fn solve(shape: &Shape, fixed_values: &FixedValues, cell_conflicts: &Vec<CellConflicts>) {
     let mut stack: Vec<CellIndex> = (0..shape.num_cells).collect();
     let mut grids: Vec<Grid> =
         (0..shape.num_cells+1).map(|_| Grid::new(shape)).collect();
 
+    for grid in &mut grids {
+        grid.cells.fill(ValueSet::full(shape.num_values));
+    }
+
     let mut depth = 0;
-    for (cell_index, value) in grid.cells.iter().enumerate() {
-        if value.empty() {
-            grids[depth].cells[cell_index] = ValueSet::full(shape.num_values);
-        } else {
-            grids[depth].cells[cell_index] = *value;
-        }
+    for (cell, value) in fixed_values {
+        grids[depth].cells[*cell] = ValueSet::from_value(*value);
     }
 
     let mut num_solutions = 0;
@@ -137,13 +139,10 @@ fn solve(grid: &Grid, shape: &Shape, cell_conflicts: &Vec<CellConflicts>) {
 
 fn main() {
     let input = ".76.9..8...2..3..9.3.6.....1..5......69.2.43......6..8.....1.5.6..2..8...2..5.17.";
-    let shape = Shape::new(3);
-    let mut grid = Grid::new(&shape);
-    grid.load_from_str(&input);
+
+    let (shape, fixed_values) = parser::parse_text(input);
 
     let houses = make_houses(shape);
     let cell_conflicts = make_cell_conflicts(&houses, &shape);
-    println!("{}", grid);
-    solve(&grid, &shape, &cell_conflicts);
-    println!("{}", grid);
+    solve(&shape, &fixed_values, &cell_conflicts);
 }

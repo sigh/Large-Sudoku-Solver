@@ -1,6 +1,7 @@
 use std::fmt;
 
 pub type CellIndex = usize;
+pub type CellValue = u32;
 
 #[derive(Copy, Clone)]
 pub struct Shape {
@@ -30,7 +31,7 @@ impl Shape {
 pub struct ValueSet(i128);
 
 impl ValueSet {
-    pub fn from_value(value: u32) -> ValueSet {
+    pub fn from_value(value: CellValue) -> ValueSet {
         ValueSet(1<<(value-1))
     }
 
@@ -38,7 +39,7 @@ impl ValueSet {
         ValueSet((1<<num_values)-1)
     }
 
-    pub fn value(&self) -> u32 {
+    pub fn value(&self) -> CellValue {
         self.0.trailing_zeros()+1
     }
 
@@ -77,16 +78,6 @@ impl Grid {
         }
     }
 
-    pub fn load_from_str(&mut self, input: &str) {
-        const RADIX: u32 = 10;
-
-        for (i, c) in input.chars().enumerate() {
-            if c.is_digit(RADIX) {
-                self.cells[i] = ValueSet::from_value(c.to_digit(RADIX).unwrap())
-            }
-        }
-    }
-
     pub fn copy_from(&mut self, other: &Grid) {
         self.cells.clone_from_slice(&other.cells[..]);
     }
@@ -106,3 +97,5 @@ impl fmt::Display for Grid {
         Ok(())
     }
 }
+
+pub type FixedValues = Vec<(CellIndex, CellValue)>;
