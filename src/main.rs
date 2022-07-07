@@ -1,6 +1,9 @@
 mod types;
 mod parser;
 
+use std::env;
+use std::fs;
+
 use types::CellIndex;
 use types::Shape;
 use types::ValueSet;
@@ -138,9 +141,14 @@ fn solve(shape: &Shape, fixed_values: &FixedValues, cell_conflicts: &Vec<CellCon
 }
 
 fn main() {
-    let input = ".76.9..8...2..3..9.3.6.....1..5......69.2.43......6..8.....1.5.6..2..8...2..5.17.";
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 2 { panic!("Must specify an input filename."); }
+    let filename = &args[1];
+    let input = fs::read_to_string(filename)
+        .expect("Something went wrong reading the input.");
 
-    let (shape, fixed_values) = parser::parse_text(input);
+    let (shape, fixed_values) = parser::parse_text(&input)
+        .expect("Could not parse input file.");
 
     let houses = make_houses(shape);
     let cell_conflicts = make_cell_conflicts(&houses, &shape);

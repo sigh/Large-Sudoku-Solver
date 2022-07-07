@@ -3,7 +3,7 @@ use std::fmt;
 pub type CellIndex = usize;
 pub type CellValue = u32;
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Shape {
     pub box_size: u32,
     pub num_values: u32,
