@@ -66,7 +66,7 @@ impl fmt::Display for ValueSet {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Grid {
     pub cells: Vec<ValueSet>,
 }

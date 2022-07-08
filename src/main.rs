@@ -15,6 +15,5 @@ fn main() {
     let (shape, fixed_values) = parser::parse_text(&input)
         .expect("Could not parse input file.");
 
-    let result = solver::solve(&shape, &fixed_values);
-    println!("{:?}", result);
+    solver::solve(&shape, &fixed_values);
 }

@@ -4,9 +4,14 @@ use crate::types::ValueSet;
 use crate::types::Grid;
 use crate::types::FixedValues;
 
-pub fn solve(shape: &Shape, fixed_values: &FixedValues) -> Counters {
-  let mut solver = Solver::new(shape);
-  solver.run(fixed_values)
+pub fn solve(shape: &Shape, fixed_values: &FixedValues) {
+  let solver = Solver::new(shape, fixed_values);
+
+  for (i, result) in solver.enumerate() {
+    if i > 1 { panic!("Too many solutions."); }
+    println!("{}", result.solution);
+    println!("{:?}", result.counters);
+  }
 }
 
 #[derive(Debug)]
@@ -53,9 +58,8 @@ fn make_houses(shape: &Shape) -> Vec<House> {
 
 type CellConflicts = Vec<CellIndex>;
 
-fn make_cell_conflicts(houses: &Vec<House>, shape: &Shape) -> Vec<CellConflicts> {
-  let mut result: Vec<CellConflicts> =
-        (0..shape.num_cells).map(|_| Vec::new()).collect();
+fn make_cell_conflicts(houses: &[House], shape: &Shape) -> Vec<CellConflicts> {
+  let mut result: Vec<CellConflicts> = vec![Vec::new(); shape.num_cells];
   for house in houses {
     for c1 in &house.cells {
         for c2 in &house.cells {
@@ -68,7 +72,7 @@ fn make_cell_conflicts(houses: &Vec<House>, shape: &Shape) -> Vec<CellConflicts>
   return result;
 }
 
-fn enforce_value(grid: &mut Grid, value: ValueSet, cell: CellIndex, cell_conflicts: &Vec<CellConflicts>) -> bool {
+fn enforce_value(grid: &mut Grid, value: ValueSet, cell: CellIndex, cell_conflicts: &[CellConflicts]) -> bool {
     for conflict_cell in &cell_conflicts[cell] {
         let values = &mut grid.cells[*conflict_cell];
         values.remove(value);
@@ -87,6 +91,11 @@ pub struct Counters {
   solutions: u64,
 }
 
+struct SolverOutput {
+  counters: Counters,
+  solution: Grid,
+}
+
 struct Solver {
   shape: Shape,
   stack: Vec<CellIndex>,
@@ -94,38 +103,56 @@ struct Solver {
   cell_conflicts: Vec<CellConflicts>,
   backtrack_triggers: Vec<u32>,
   counters: Counters,
+  done: bool,
+  depth: usize,
+}
+
+impl Iterator for Solver {
+  type Item = SolverOutput;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    self.run();
+    if self.done { return None; }
+
+    Some(SolverOutput{
+      solution: self.grids.last().unwrap().clone(),
+      counters: self.counters,
+    })
+  }
 }
 
 impl Solver {
-  fn new(shape: &Shape) -> Solver {
+  fn new(shape: &Shape, fixed_values: &FixedValues) -> Solver {
     let houses = make_houses(shape);
+    let mut empty_grid = Grid::new(shape);
+    empty_grid.cells.fill(ValueSet::full(shape.num_values));
+
+    let mut grids = vec![empty_grid; shape.num_cells+1];
+    for (cell, value) in fixed_values {
+        grids[0].cells[*cell] = ValueSet::from_value(*value);
+    }
+
     Solver{
       shape: *shape,
       stack: (0..shape.num_cells).collect(),
-      grids: (0..shape.num_cells+1).map(|_| Grid::new(shape)).collect(),
+      grids: grids,
       cell_conflicts: make_cell_conflicts(&houses, shape),
       backtrack_triggers: vec![0; shape.num_cells],
       counters: Counters::default(),
+      done: false,
+      depth: 1,
     }
   }
 
-  fn run(&mut self, fixed_values: &FixedValues) -> Counters {
-      for grid in &mut self.grids {
-          grid.cells.fill(ValueSet::full(self.shape.num_values));
-      }
+  fn run(&mut self) {
+      if self.done { return; }
 
-      let mut depth = 0;
-      for (cell, value) in fixed_values {
-          self.grids[depth].cells[*cell] = ValueSet::from_value(*value);
-      }
+      while self.depth > 0 {
+          let (grids_front, grids_back) = self.grids.split_at_mut(self.depth);
+          self.depth -= 1;
 
-      depth += 1;
-      while depth > 0 {
-          let (grids_front, grids_back) = self.grids.split_at_mut(depth);
-          depth -= 1;
-
-          let mut grid = &mut grids_front[depth];
-          let cell = self.stack[depth];
+          let mut grid = &mut grids_front[self.depth];
+          let cell = self.stack[self.depth];
           let values = &mut grid.cells[cell];
 
           // No more values to try.
@@ -138,7 +165,7 @@ impl Solver {
           values.remove(value);
 
           // Copy the current cell values.
-          depth += 1;
+          self.depth += 1;
           grids_back[0].copy_from(grid);
 
           // Update the grid with the trial value.
@@ -153,21 +180,18 @@ impl Solver {
           }
 
           // Check if we have a solution.
-          if depth == self.shape.num_cells {
+          if self.depth == self.shape.num_cells {
               self.counters.solutions += 1;
-              println!("Solved!");
-              println!("{}", grid);
-              if self.counters.solutions > 2 { panic!() }
-              continue;
+              return;
           }
 
           // Find the next cell to try.
-          self.update_cell_order(depth);
+          self.update_cell_order(self.depth);
           self.counters.cells_searched += 1;
-          depth += 1;
+          self.depth += 1;
       }
 
-      self.counters
+      self.done = true;
   }
 
   fn record_backtrack(&mut self, cell: CellIndex) {
@@ -215,5 +239,4 @@ impl Solver {
 
       grid.cells[stack[depth]].count()
   }
-
 }
