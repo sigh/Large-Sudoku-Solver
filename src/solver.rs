@@ -77,8 +77,6 @@ fn enforce_value(grid: &mut Grid, value: ValueSet, cell: CellIndex, cell_conflic
     true
 }
 
-fn update_cell_order(_stack: &mut Vec<CellIndex>, _depth: usize, _grid: &Grid) {
-}
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Counters {
@@ -94,6 +92,7 @@ struct Solver {
   stack: Vec<CellIndex>,
   grids: Vec<Grid>,
   cell_conflicts: Vec<CellConflicts>,
+  backtrack_triggers: Vec<u32>,
   counters: Counters,
 }
 
@@ -105,6 +104,7 @@ impl Solver {
       stack: (0..shape.num_cells).collect(),
       grids: (0..shape.num_cells+1).map(|_| Grid::new(shape)).collect(),
       cell_conflicts: make_cell_conflicts(&houses, shape),
+      backtrack_triggers: vec![0; shape.num_cells],
       counters: Counters::default(),
     }
   }
@@ -148,7 +148,7 @@ impl Solver {
           // Propograte constraints.
           let has_contradiction = !enforce_value(&mut grid, value, cell, &self.cell_conflicts);
           if has_contradiction {
-            self.counters.backtracks += 1;
+            self.record_backtrack(cell);
             continue;
           }
 
@@ -162,11 +162,58 @@ impl Solver {
           }
 
           // Find the next cell to try.
-          update_cell_order(&mut self.stack, depth, grid);
+          self.update_cell_order(depth);
           self.counters.cells_searched += 1;
           depth += 1;
       }
 
       self.counters
   }
+
+  fn record_backtrack(&mut self, cell: CellIndex) {
+      const BACKTRACK_DECAY_INTERVAL: u64 = 100*100;
+      self.counters.backtracks += 1;
+      if 0 == self.counters.backtracks % BACKTRACK_DECAY_INTERVAL {
+          for i in 0..self.backtrack_triggers.len() {
+              self.backtrack_triggers[i] >>= 1;
+          }
+      }
+      self.backtrack_triggers[cell] += 1;
+  }
+
+  // Find the best cell and bring it to the front. This means that it will
+  // be processed next.
+  fn update_cell_order(&mut self, depth: usize) -> u32 {
+      let mut best_index = 0;
+      let mut min_score = u32::MAX;
+
+      let stack = &mut self.stack;
+      let grid = &mut self.grids[depth];
+
+      for i in depth..stack.len() {
+          let cell = stack[i];
+          let count = grid.cells[cell].count();
+
+          // If we have a single value then just use it - as it will involve no
+          // guessing.
+          if count <= 1 {
+              best_index = i;
+              break;
+          }
+
+          let bt = self.backtrack_triggers[cell];
+          let score = if bt > 1 { count/bt } else { count };
+
+          if score < min_score {
+              best_index= i;
+              min_score = score;
+          }
+      }
+
+      // Swap the best cell into place.
+      (stack[best_index], stack[depth]) = (stack[depth], stack[best_index]);
+
+      grid.cells[stack[depth]].count()
+  }
+
 }

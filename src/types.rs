@@ -28,7 +28,7 @@ impl Shape {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub struct ValueSet(i128);
+pub struct ValueSet(i32);
 
 impl ValueSet {
     pub fn from_value(value: CellValue) -> ValueSet {
