@@ -1,8 +1,13 @@
+mod handlers;
+
+use crate::solver::handlers::HandlerSet;
 use crate::types::CellIndex;
 use crate::types::CellValue;
 use crate::types::FixedValues;
 use crate::types::Shape;
 use crate::types::ValueSet;
+
+use self::handlers::CellAccumulator;
 
 pub fn solve(shape: &Shape, fixed_values: &FixedValues) {
     let solver = Solver::new(shape, fixed_values);
@@ -16,76 +21,25 @@ pub fn solve(shape: &Shape, fixed_values: &FixedValues) {
     }
 }
 
-type House = Vec<CellIndex>;
 type Grid = Vec<ValueSet>;
-
-fn make_houses(shape: &Shape) -> Vec<House> {
-    let mut houses = Vec::new();
-    let side_len = shape.side_len;
-    let box_size = shape.box_size;
-
-    // Make rows.
-    for r in 0..side_len {
-        let mut house = vec![0; side_len as usize];
-        for c in 0..side_len {
-            house[c as usize] = shape.make_cell_index(r, c);
-        }
-        houses.push(house);
-    }
-
-    // Make columns.
-    for c in 0..side_len {
-        let mut house = vec![0; side_len as usize];
-        for r in 0..side_len {
-            house[r as usize] = shape.make_cell_index(r, c);
-        }
-        houses.push(house);
-    }
-
-    // Make boxes.
-    for b in 0..side_len {
-        let mut house = vec![0; side_len as usize];
-        for i in 0..side_len {
-            let r = (b % box_size) * box_size + (i / box_size);
-            let c = (b / box_size) * box_size + (i % box_size);
-            house[i as usize] = shape.make_cell_index(r, c);
-        }
-        houses.push(house);
-    }
-
-    return houses;
-}
 
 type CellConflicts = Vec<CellIndex>;
 
-fn make_cell_conflicts(houses: &[House], shape: &Shape) -> Vec<CellConflicts> {
+fn make_cell_conflicts(handler_set: &HandlerSet, shape: &Shape) -> Vec<CellConflicts> {
     let mut result: Vec<CellConflicts> = vec![Vec::new(); shape.num_cells];
-    for house in houses {
-        for c1 in house {
-            for c2 in house {
+
+    for handler in handler_set.iter() {
+        let conflicts = handler.conflict_set();
+        for c1 in conflicts {
+            for c2 in conflicts {
                 if c1 != c2 {
                     result[*c1].push(*c2);
                 }
             }
         }
     }
-    return result;
-}
 
-fn enforce_value(
-    grid: &mut Grid,
-    value: ValueSet,
-    cell: CellIndex,
-    cell_conflicts: &[CellConflicts],
-) -> bool {
-    for conflict_cell in &cell_conflicts[cell] {
-        let values = &mut grid[*conflict_cell];
-        values.remove(value);
-        if values.empty() {
-            return false;
-        }
-    }
-    true
+    return result;
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -102,6 +56,8 @@ struct Solver {
     stack: Vec<CellIndex>,
     grids: Vec<Grid>,
     cell_conflicts: Vec<CellConflicts>,
+    handler_set: HandlerSet,
+    cell_accumulator: CellAccumulator,
     backtrack_triggers: Vec<u32>,
     counters: Counters,
     done: bool,
@@ -133,7 +89,8 @@ impl Iterator for Solver {
 
 impl Solver {
     fn new(shape: &Shape, fixed_values: &FixedValues) -> Solver {
-        let houses = make_houses(shape);
+        let handler_set = handlers::make_handlers(shape);
+        let cell_accumulator = CellAccumulator::new(shape.num_cells, &handler_set);
 
         let empty_grid = vec![ValueSet::full(shape.num_values); shape.num_cells];
         let mut grids = vec![empty_grid; shape.num_cells + 1];
@@ -145,8 +102,10 @@ impl Solver {
         Solver {
             shape: *shape,
             stack: (0..shape.num_cells).collect(),
-            grids: grids,
-            cell_conflicts: make_cell_conflicts(&houses, shape),
+            grids,
+            cell_conflicts: make_cell_conflicts(&handler_set, shape),
+            handler_set,
+            cell_accumulator,
             backtrack_triggers: vec![0; shape.num_cells],
             counters: Counters::default(),
             done: false,
@@ -168,7 +127,7 @@ impl Solver {
             let values = &mut grid[cell];
 
             // No more values to try.
-            if values.empty() {
+            if values.is_empty() {
                 continue;
             }
 
@@ -187,7 +146,14 @@ impl Solver {
             grid[cell] = value;
 
             // Propograte constraints.
-            let has_contradiction = !enforce_value(&mut grid, value, cell, &self.cell_conflicts);
+            let has_contradiction = !Self::enforce_value(
+                &mut grid,
+                value,
+                cell,
+                &self.cell_conflicts,
+                &mut self.cell_accumulator,
+                &self.handler_set,
+            );
             if has_contradiction {
                 self.record_backtrack(cell);
                 continue;
@@ -252,5 +218,44 @@ impl Solver {
         (stack[best_index], stack[depth]) = (stack[depth], stack[best_index]);
 
         grid[stack[depth]].count()
+    }
+
+    fn enforce_value(
+        grid: &mut Grid,
+        value: ValueSet,
+        cell: CellIndex,
+        cell_conflicts: &[CellConflicts],
+        cell_accumulator: &mut CellAccumulator,
+        handler_set: &HandlerSet,
+    ) -> bool {
+        cell_accumulator.clear();
+        cell_accumulator.add(cell);
+
+        for conflict_cell in &cell_conflicts[cell] {
+            let values = &mut grid[*conflict_cell];
+            if *values != value {
+                cell_accumulator.add(*conflict_cell);
+            }
+            values.remove(value);
+            if values.is_empty() {
+                return false;
+            }
+        }
+
+        Self::enforce_constraints(grid, cell_accumulator, handler_set)
+    }
+
+    fn enforce_constraints(
+        grid: &mut Grid,
+        cell_accumulator: &mut CellAccumulator,
+        handler_set: &HandlerSet,
+    ) -> bool {
+        while let Some(handler_index) = cell_accumulator.pop() {
+            let handler = &handler_set[handler_index];
+            if !handler.enforce_constraint(grid) {
+                return false;
+            }
+        }
+        true
     }
 }

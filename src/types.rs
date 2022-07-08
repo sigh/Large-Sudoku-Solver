@@ -39,6 +39,10 @@ impl ValueSet {
         ValueSet((1 << num_values) - 1)
     }
 
+    pub fn empty(num_values: u32) -> ValueSet {
+        ValueSet(0)
+    }
+
     pub fn value(&self) -> CellValue {
         self.0.trailing_zeros() + 1
     }
@@ -47,7 +51,7 @@ impl ValueSet {
         self.0.count_ones()
     }
 
-    pub fn empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.0 == 0
     }
 
