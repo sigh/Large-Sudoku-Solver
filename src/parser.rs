@@ -21,7 +21,7 @@ fn remove_whitespace(s: &mut String) {
 
 fn guess_dimension(num_cells: usize) -> Option<u32> {
     let dim = (num_cells as f64).sqrt().sqrt() as usize;
-    if dim < 2 || dim > 11 {
+    if !(2..=11).contains(&dim) {
         return None;
     }
     if dim * dim * dim * dim != num_cells {

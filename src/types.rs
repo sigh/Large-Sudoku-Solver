@@ -1,4 +1,7 @@
-use std::fmt;
+use std::{
+    fmt,
+    ops::{BitOr, BitOrAssign},
+};
 
 pub type CellIndex = usize;
 pub type CellValue = u32;
@@ -28,7 +31,7 @@ impl Shape {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub struct ValueSet(i32);
+pub struct ValueSet(i64);
 
 impl ValueSet {
     pub fn from_value(value: CellValue) -> ValueSet {
@@ -39,7 +42,7 @@ impl ValueSet {
         ValueSet((1 << num_values) - 1)
     }
 
-    pub fn empty(num_values: u32) -> ValueSet {
+    pub fn empty() -> ValueSet {
         ValueSet(0)
     }
 
@@ -61,6 +64,18 @@ impl ValueSet {
 
     pub fn remove(&mut self, other: ValueSet) {
         self.0 &= !other.0
+    }
+}
+
+impl BitOr for ValueSet {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+impl BitOrAssign for ValueSet {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
     }
 }
 

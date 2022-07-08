@@ -9,7 +9,9 @@ type BoxedHandler = Box<dyn ConstraintHandler>;
 type HandlerIndex = usize;
 
 pub trait ConstraintHandler {
-    fn enforce_constraint(&self, grid: &[ValueSet]) -> bool;
+    // Remove inconsistent values from grid.
+    // Return false if the grid is inconsistent.
+    fn enforce_consistency(&self, grid: &mut [ValueSet]) -> bool;
 
     // Cells on which to enforce this constraint.
     fn cells(&self) -> &[CellIndex];
@@ -20,16 +22,38 @@ pub trait ConstraintHandler {
 
 struct HouseHandler {
     cells: Vec<CellIndex>,
+    all_values: ValueSet,
 }
 
 impl HouseHandler {
-    pub fn new(cells: Vec<CellIndex>) -> HouseHandler {
-        HouseHandler { cells }
+    pub fn new(cells: Vec<CellIndex>, shape: &Shape) -> HouseHandler {
+        HouseHandler {
+            cells,
+            all_values: ValueSet::full(shape.num_values),
+        }
     }
 }
 
 impl ConstraintHandler for HouseHandler {
-    fn enforce_constraint(&self, _grid: &[ValueSet]) -> bool {
+    fn enforce_consistency(&self, grid: &mut [ValueSet]) -> bool {
+        let mut all_values = ValueSet::empty();
+        let mut fixed_values = ValueSet::empty();
+
+        for cell in &self.cells {
+            let v = grid[*cell];
+            all_values |= v;
+            if v.count() == 1 {
+                fixed_values |= v;
+            }
+        }
+
+        if all_values != self.all_values {
+            return false;
+        }
+        if fixed_values == self.all_values {
+            return true;
+        }
+
         true
     }
 
@@ -108,7 +132,7 @@ pub fn make_handlers(shape: &Shape) -> HandlerSet {
 
     let houses = make_houses(shape);
     for house in houses {
-        let handler = HouseHandler::new(house.clone());
+        let handler = HouseHandler::new(house.clone(), shape);
         handler_set.add(Box::new(handler));
     }
 

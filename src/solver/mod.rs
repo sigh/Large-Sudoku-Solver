@@ -39,7 +39,7 @@ fn make_cell_conflicts(handler_set: &HandlerSet, shape: &Shape) -> Vec<CellConfl
         }
     }
 
-    return result;
+    result
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -78,7 +78,7 @@ impl Iterator for Solver {
             return None;
         }
 
-        let solution = self.grids.last().unwrap().into_iter().map(|vs| vs.value());
+        let solution = self.grids.last().unwrap().iter().map(|vs| vs.value());
 
         Some(SolverOutput {
             solution: solution.collect(),
@@ -194,9 +194,8 @@ impl Solver {
         let stack = &mut self.stack;
         let grid = &mut self.grids[depth];
 
-        for i in depth..stack.len() {
-            let cell = stack[i];
-            let count = grid[cell].count();
+        for (i, cell) in stack.iter().enumerate().skip(depth) {
+            let count = grid[*cell].count();
 
             // If we have a single value then just use it - as it will involve no
             // guessing.
@@ -205,7 +204,7 @@ impl Solver {
                 break;
             }
 
-            let bt = self.backtrack_triggers[cell];
+            let bt = self.backtrack_triggers[*cell];
             let score = if bt > 1 { count / bt } else { count };
 
             if score < min_score {
@@ -252,7 +251,7 @@ impl Solver {
     ) -> bool {
         while let Some(handler_index) = cell_accumulator.pop() {
             let handler = &handler_set[handler_index];
-            if !handler.enforce_constraint(grid) {
+            if !handler.enforce_consistency(grid) {
                 return false;
             }
         }
