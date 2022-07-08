@@ -13,17 +13,17 @@ pub struct Shape {
 
 impl Shape {
     pub fn new(dim: u32) -> Shape {
-        let num_values = dim*dim;
-        Shape{
+        let num_values = dim * dim;
+        Shape {
             box_size: dim,
             num_values: num_values,
-            num_cells: (num_values*num_values).try_into().unwrap(),
+            num_cells: (num_values * num_values).try_into().unwrap(),
             side_len: num_values,
         }
     }
 
     pub fn make_cell_index(&self, row: u32, col: u32) -> CellIndex {
-        ((row*self.side_len)+col).try_into().unwrap()
+        ((row * self.side_len) + col).try_into().unwrap()
     }
 }
 
@@ -32,15 +32,15 @@ pub struct ValueSet(i32);
 
 impl ValueSet {
     pub fn from_value(value: CellValue) -> ValueSet {
-        ValueSet(1<<(value-1))
+        ValueSet(1 << (value - 1))
     }
 
     pub fn full(num_values: u32) -> ValueSet {
-        ValueSet((1<<num_values)-1)
+        ValueSet((1 << num_values) - 1)
     }
 
     pub fn value(&self) -> CellValue {
-        self.0.trailing_zeros()+1
+        self.0.trailing_zeros() + 1
     }
 
     pub fn count(&self) -> u32 {
