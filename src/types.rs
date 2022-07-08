@@ -1,6 +1,6 @@
 use std::{
     fmt,
-    ops::{BitOr, BitOrAssign},
+    ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not},
 };
 
 pub type CellIndex = usize;
@@ -19,7 +19,7 @@ impl Shape {
         let num_values = dim * dim;
         Shape {
             box_size: dim,
-            num_values: num_values,
+            num_values,
             num_cells: (num_values * num_values).try_into().unwrap(),
             side_len: num_values,
         }
@@ -38,8 +38,16 @@ impl ValueSet {
         ValueSet(1 << (value - 1))
     }
 
+    pub fn from_value0(value: u32) -> ValueSet {
+        ValueSet(1 << value)
+    }
+
     pub fn full(num_values: u32) -> ValueSet {
         ValueSet((1 << num_values) - 1)
+    }
+
+    pub fn max() -> ValueSet {
+        ValueSet(-1)
     }
 
     pub fn empty() -> ValueSet {
@@ -48,6 +56,10 @@ impl ValueSet {
 
     pub fn value(&self) -> CellValue {
         self.0.trailing_zeros() + 1
+    }
+
+    pub fn value0(&self) -> u32 {
+        self.0.trailing_zeros()
     }
 
     pub fn count(&self) -> u32 {
@@ -76,6 +88,26 @@ impl BitOr for ValueSet {
 impl BitOrAssign for ValueSet {
     fn bitor_assign(&mut self, rhs: Self) {
         self.0 |= rhs.0;
+    }
+}
+
+impl BitAnd for ValueSet {
+    type Output = Self;
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self(self.0 & rhs.0)
+    }
+}
+impl BitAndAssign for ValueSet {
+    fn bitand_assign(&mut self, rhs: Self) {
+        self.0 &= rhs.0;
+    }
+}
+
+impl Not for ValueSet {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        ValueSet(!self.0)
     }
 }
 

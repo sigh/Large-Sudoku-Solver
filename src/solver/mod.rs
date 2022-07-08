@@ -1,3 +1,4 @@
+mod all_different;
 mod handlers;
 
 use crate::solver::handlers::HandlerSet;
@@ -19,6 +20,8 @@ pub fn solve(shape: &Shape, fixed_values: &FixedValues) {
         println!("{:?}", result.solution);
         println!("{:?}", result.counters);
     }
+
+    // TODO: get final counters.
 }
 
 type Grid = Vec<ValueSet>;

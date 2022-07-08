@@ -5,6 +5,8 @@ use crate::types::ValueSet;
 use std::num::NonZeroUsize;
 use std::ops::Deref;
 
+use super::all_different;
+
 type BoxedHandler = Box<dyn ConstraintHandler>;
 type HandlerIndex = usize;
 
@@ -54,7 +56,7 @@ impl ConstraintHandler for HouseHandler {
             return true;
         }
 
-        true
+        all_different::enforce_all_different(grid, &self.cells)
     }
 
     fn cells(&self) -> &[CellIndex] {
