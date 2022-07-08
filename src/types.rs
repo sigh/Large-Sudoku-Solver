@@ -27,7 +27,7 @@ impl Shape {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct ValueSet(i128);
 
 impl ValueSet {
