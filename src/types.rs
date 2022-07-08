@@ -71,31 +71,4 @@ pub struct Grid {
     pub cells: Vec<ValueSet>,
 }
 
-impl Grid {
-    pub fn new(shape: &Shape) -> Grid {
-        Grid{
-            cells: vec![ValueSet(0); shape.num_cells],
-        }
-    }
-
-    pub fn copy_from(&mut self, other: &Grid) {
-        self.cells.clone_from_slice(&other.cells[..]);
-    }
-}
-
-impl fmt::Display for Grid {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for c in &self.cells {
-            if c.count() == 1 {
-                write!(f, "{} ", c.value())?;
-            } else if c.count() == 0 {
-                write!(f, ". ")?;
-            } else {
-                write!(f, "x ")?;
-            }
-        }
-        Ok(())
-    }
-}
-
 pub type FixedValues = Vec<(CellIndex, CellValue)>;

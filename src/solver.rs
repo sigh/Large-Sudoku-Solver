@@ -1,23 +1,21 @@
 use crate::types::CellIndex;
+use crate::types::CellValue;
 use crate::types::Shape;
 use crate::types::ValueSet;
-use crate::types::Grid;
 use crate::types::FixedValues;
 
 pub fn solve(shape: &Shape, fixed_values: &FixedValues) {
-  let solver = Solver::new(shape, fixed_values);
+    let solver = Solver::new(shape, fixed_values);
 
-  for (i, result) in solver.enumerate() {
-    if i > 1 { panic!("Too many solutions."); }
-    println!("{}", result.solution);
-    println!("{:?}", result.counters);
-  }
+    for (i, result) in solver.enumerate() {
+        if i > 1 { panic!("Too many solutions."); }
+        println!("{:?}", result.solution);
+        println!("{:?}", result.counters);
+    }
 }
 
-#[derive(Debug)]
-struct House {
-    cells: Vec<CellIndex>,
-}
+type House = Vec<CellIndex>;
+type Grid = Vec<ValueSet>;
 
 fn make_houses(shape: &Shape) -> Vec<House> {
     let mut houses = Vec::new();
@@ -26,29 +24,29 @@ fn make_houses(shape: &Shape) -> Vec<House> {
 
     // Make rows.
     for r in 0..side_len {
-        let mut house = House{cells: Vec::new()};
+        let mut house = vec![0; side_len as usize];
         for c in 0..side_len {
-            house.cells.push(shape.make_cell_index(r, c));
+            house[c as usize] = shape.make_cell_index(r, c);
         }
         houses.push(house);
     }
 
     // Make columns.
     for c in 0..side_len {
-        let mut house = House{cells: Vec::new()};
+        let mut house = vec![0; side_len as usize];
         for r in 0..side_len {
-            house.cells.push(shape.make_cell_index(r, c));
+            house[r as usize] = shape.make_cell_index(r, c);
         }
         houses.push(house);
     }
 
     // Make boxes.
     for b in 0..side_len {
-        let mut house = House{cells: Vec::new()};
+        let mut house = vec![0; side_len as usize];
         for i in 0..side_len {
             let r = (b%box_size)*box_size+(i/box_size);
             let c = (b/box_size)*box_size+(i%box_size);
-            house.cells.push(shape.make_cell_index(r, c));
+            house[i as usize] = shape.make_cell_index(r, c);
         }
         houses.push(house);
     }
@@ -61,8 +59,8 @@ type CellConflicts = Vec<CellIndex>;
 fn make_cell_conflicts(houses: &[House], shape: &Shape) -> Vec<CellConflicts> {
   let mut result: Vec<CellConflicts> = vec![Vec::new(); shape.num_cells];
   for house in houses {
-    for c1 in &house.cells {
-        for c2 in &house.cells {
+    for c1 in house {
+        for c2 in house {
             if c1 != c2 {
                 result[*c1].push(*c2);
             }
@@ -74,7 +72,7 @@ fn make_cell_conflicts(houses: &[House], shape: &Shape) -> Vec<CellConflicts> {
 
 fn enforce_value(grid: &mut Grid, value: ValueSet, cell: CellIndex, cell_conflicts: &[CellConflicts]) -> bool {
     for conflict_cell in &cell_conflicts[cell] {
-        let values = &mut grid.cells[*conflict_cell];
+        let values = &mut grid[*conflict_cell];
         values.remove(value);
         if values.empty() { return false; }
     }
@@ -84,27 +82,27 @@ fn enforce_value(grid: &mut Grid, value: ValueSet, cell: CellIndex, cell_conflic
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Counters {
-  values_tried: u64,
-  cells_searched: u64,
-  backtracks: u64,
-  guesses: u64,
-  solutions: u64,
-}
-
-struct SolverOutput {
-  counters: Counters,
-  solution: Grid,
+    values_tried: u64,
+    cells_searched: u64,
+    backtracks: u64,
+    guesses: u64,
+    solutions: u64,
 }
 
 struct Solver {
-  shape: Shape,
-  stack: Vec<CellIndex>,
-  grids: Vec<Grid>,
-  cell_conflicts: Vec<CellConflicts>,
-  backtrack_triggers: Vec<u32>,
-  counters: Counters,
-  done: bool,
-  depth: usize,
+    shape: Shape,
+    stack: Vec<CellIndex>,
+    grids: Vec<Grid>,
+    cell_conflicts: Vec<CellConflicts>,
+    backtrack_triggers: Vec<u32>,
+    counters: Counters,
+    done: bool,
+    depth: usize,
+}
+
+struct SolverOutput {
+    counters: Counters,
+    solution: Vec<CellValue>,
 }
 
 impl Iterator for Solver {
@@ -114,8 +112,10 @@ impl Iterator for Solver {
     self.run();
     if self.done { return None; }
 
+    let solution = self.grids.last().unwrap().into_iter().map(|vs| vs.value());
+
     Some(SolverOutput{
-      solution: self.grids.last().unwrap().clone(),
+      solution: solution.collect(),
       counters: self.counters,
     })
   }
@@ -124,12 +124,12 @@ impl Iterator for Solver {
 impl Solver {
   fn new(shape: &Shape, fixed_values: &FixedValues) -> Solver {
     let houses = make_houses(shape);
-    let mut empty_grid = Grid::new(shape);
-    empty_grid.cells.fill(ValueSet::full(shape.num_values));
 
+    let empty_grid = vec![ValueSet::full(shape.num_values); shape.num_cells];
     let mut grids = vec![empty_grid; shape.num_cells+1];
+
     for (cell, value) in fixed_values {
-        grids[0].cells[*cell] = ValueSet::from_value(*value);
+        grids[0][*cell] = ValueSet::from_value(*value);
     }
 
     Solver{
@@ -153,7 +153,7 @@ impl Solver {
 
           let mut grid = &mut grids_front[self.depth];
           let cell = self.stack[self.depth];
-          let values = &mut grid.cells[cell];
+          let values = &mut grid[cell];
 
           // No more values to try.
           if values.empty() { continue; }
@@ -166,11 +166,11 @@ impl Solver {
 
           // Copy the current cell values.
           self.depth += 1;
-          grids_back[0].copy_from(grid);
+          grids_back[0].copy_from_slice(grid);
 
           // Update the grid with the trial value.
           grid = &mut grids_back[0];
-          grid.cells[cell] = value;
+          grid[cell] = value;
 
           // Propograte constraints.
           let has_contradiction = !enforce_value(&mut grid, value, cell, &self.cell_conflicts);
@@ -216,7 +216,7 @@ impl Solver {
 
       for i in depth..stack.len() {
           let cell = stack[i];
-          let count = grid.cells[cell].count();
+          let count = grid[cell].count();
 
           // If we have a single value then just use it - as it will involve no
           // guessing.
@@ -237,6 +237,6 @@ impl Solver {
       // Swap the best cell into place.
       (stack[best_index], stack[depth]) = (stack[depth], stack[best_index]);
 
-      grid.cells[stack[depth]].count()
+      grid[stack[depth]].count()
   }
 }
