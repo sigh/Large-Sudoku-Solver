@@ -4,17 +4,21 @@ use crate::types::ValueSet;
 
 use std::cell::RefCell;
 
-use super::all_different;
+type HandlerIndex = usize;
+
+use crate::solver::all_different::AllDifferentEnforcer;
 
 pub fn enforce_constraints(
     grid: &mut [ValueSet],
     cell_accumulator: &mut CellAccumulator,
     handler_set: &HandlerSet,
 ) -> bool {
+    let mut all_different_enforcer = handler_set.all_diff_enforcer.borrow_mut();
+
     while let Some(handler_index) = cell_accumulator.pop() {
         cell_accumulator.hold(handler_index);
-        let handler = &handler_set[handler_index];
-        if !handler.enforce_consistency(grid, cell_accumulator) {
+        let handler = &handler_set.handlers[handler_index];
+        if !handler.enforce_consistency(grid, cell_accumulator, &mut all_different_enforcer) {
             cell_accumulator.clear();
             return false;
         }
@@ -23,27 +27,10 @@ pub fn enforce_constraints(
     true
 }
 
-type HandlerIndex = usize;
-
-pub trait ConstraintHandler {
-    // Remove inconsistent values from grid.
-    // Return false if the grid is inconsistent.
-    fn enforce_consistency(
-        &self,
-        grid: &mut [ValueSet],
-        cell_accumulator: &mut CellAccumulator,
-    ) -> bool;
-
-    // Cells on which to enforce this constraint.
-    fn cells(&self) -> &[CellIndex];
-}
-
-use all_different::AllDifferentEnforcer;
 pub struct HouseHandler {
     cells: Vec<CellIndex>,
     all_values: ValueSet,
     num_values: u32,
-    all_diff: RefCell<AllDifferentEnforcer>,
 }
 
 impl HouseHandler {
@@ -52,16 +39,14 @@ impl HouseHandler {
             cells,
             num_values: shape.num_values,
             all_values: ValueSet::full(shape.num_values),
-            all_diff: RefCell::new(AllDifferentEnforcer::new(shape.num_values)),
         }
     }
-}
 
-impl ConstraintHandler for HouseHandler {
     fn enforce_consistency(
         &self,
         grid: &mut [ValueSet],
         cell_accumulator: &mut CellAccumulator,
+        all_diff_enforcer: &mut AllDifferentEnforcer,
     ) -> bool {
         let mut all_values = ValueSet::empty();
         let mut total_count = 0;
@@ -79,9 +64,7 @@ impl ConstraintHandler for HouseHandler {
             return true;
         }
 
-        self.all_diff
-            .borrow_mut()
-            .enforce_all_different(grid, &self.cells, cell_accumulator)
+        all_diff_enforcer.enforce_all_different(grid, &self.cells, cell_accumulator)
     }
 
     fn cells(&self) -> &[CellIndex] {
@@ -89,7 +72,19 @@ impl ConstraintHandler for HouseHandler {
     }
 }
 
-pub type HandlerSet = Vec<HouseHandler>;
+pub struct HandlerSet {
+    handlers: Vec<HouseHandler>,
+    all_diff_enforcer: RefCell<AllDifferentEnforcer>,
+}
+
+impl HandlerSet {
+    fn new(shape: &Shape) -> HandlerSet {
+        HandlerSet {
+            handlers: Vec::new(),
+            all_diff_enforcer: RefCell::new(AllDifferentEnforcer::new(shape.num_values)),
+        }
+    }
+}
 
 fn make_houses(shape: &Shape) -> Vec<Vec<CellIndex>> {
     let mut houses = Vec::new();
@@ -129,12 +124,12 @@ fn make_houses(shape: &Shape) -> Vec<Vec<CellIndex>> {
 }
 
 pub fn make_handlers(shape: &Shape) -> HandlerSet {
-    let mut handler_set = HandlerSet::new();
+    let mut handler_set = HandlerSet::new(shape);
 
     let houses = make_houses(shape);
     for house in houses {
         let handler = HouseHandler::new(house, shape);
-        handler_set.push(handler);
+        handler_set.handlers.push(handler);
     }
 
     handler_set
@@ -209,7 +204,7 @@ pub struct CellAccumulator {
 impl CellAccumulator {
     pub fn new(num_cells: usize, handler_set: &HandlerSet) -> CellAccumulator {
         let mut cell_to_handlers = vec![Vec::new(); num_cells];
-        for (index, handler) in handler_set.iter().enumerate() {
+        for (index, handler) in handler_set.handlers.iter().enumerate() {
             for cell in handler.cells() {
                 cell_to_handlers[*cell].push(index);
             }
@@ -217,7 +212,7 @@ impl CellAccumulator {
 
         CellAccumulator {
             cell_to_handlers,
-            linked_list: IndexLinkedList::new(handler_set.len()),
+            linked_list: IndexLinkedList::new(handler_set.handlers.len()),
         }
     }
 

@@ -57,10 +57,10 @@ impl AllDifferentEnforcer {
         self.remove_scc();
 
         // Remove any remaining edges as they are impossible assignments.
-        for (i, &cell) in cells.iter().enumerate() {
-            if !self.cell_nodes[i].is_empty() {
-                cell_accumulator.add(cell);
-                grid[cell] &= !self.cell_nodes[i];
+        for (i, cell_node) in self.cell_nodes.iter().enumerate() {
+            if !cell_node.is_empty() {
+                cell_accumulator.add(cells[i]);
+                grid[cells[i]] &= !*cell_node;
             }
         }
 
