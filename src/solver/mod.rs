@@ -11,17 +11,24 @@ use crate::types::ValueSet;
 use self::handlers::CellAccumulator;
 
 pub fn solve(shape: &Shape, fixed_values: &FixedValues) {
-    let solver = Solver::new(shape, fixed_values);
+    const LOG_UPDATE_FREQUENCY: u64 = 12;
+    let progress_callback = ProgressCallback {
+        callback: |counters| println!("{:?}", counters),
+        frequency_mask: (1 << LOG_UPDATE_FREQUENCY) - 1,
+    };
+    let solver = Solver::new(shape, fixed_values, progress_callback);
 
     for (i, result) in solver.enumerate() {
         if i > 1 {
             panic!("Too many solutions.");
         }
         println!("{:?}", result.solution);
-        println!("{:?}", result.counters);
     }
+}
 
-    // TODO: get final counters.
+struct ProgressCallback {
+    callback: fn(&Counters),
+    frequency_mask: u64,
 }
 
 type Grid = Vec<ValueSet>;
@@ -52,6 +59,7 @@ pub struct Counters {
     backtracks: u64,
     guesses: u64,
     solutions: u64,
+    progress_ratio: f64,
 }
 
 struct Solver {
@@ -62,13 +70,14 @@ struct Solver {
     handler_set: HandlerSet,
     cell_accumulator: CellAccumulator,
     backtrack_triggers: Vec<u32>,
+    progress_ratio_stack: Vec<f64>,
     counters: Counters,
     done: bool,
     depth: usize,
+    progress_callback: ProgressCallback,
 }
 
 struct SolverOutput {
-    counters: Counters,
     solution: Vec<CellValue>,
 }
 
@@ -83,15 +92,18 @@ impl Iterator for Solver {
 
         let solution = self.grids.last().unwrap().iter().map(|vs| vs.value());
 
-        Some(SolverOutput {
+        Some(Self::Item {
             solution: solution.collect(),
-            counters: self.counters,
         })
     }
 }
 
 impl Solver {
-    fn new(shape: &Shape, fixed_values: &FixedValues) -> Solver {
+    fn new(
+        shape: &Shape,
+        fixed_values: &FixedValues,
+        progress_callback: ProgressCallback,
+    ) -> Solver {
         let handler_set = handlers::make_handlers(shape);
         let cell_accumulator = CellAccumulator::new(shape.num_cells, &handler_set);
 
@@ -110,9 +122,11 @@ impl Solver {
             handler_set,
             cell_accumulator,
             backtrack_triggers: vec![0; shape.num_cells],
+            progress_ratio_stack: vec![1.0; shape.num_cells + 1],
             counters: Counters::default(),
             done: false,
-            depth: 1,
+            depth: 0,
+            progress_callback,
         }
     }
 
@@ -120,6 +134,16 @@ impl Solver {
         if self.done {
             return;
         }
+
+        if self.counters.cells_searched == 0 {
+            let count = self.update_cell_order(self.depth);
+            self.depth += 1;
+            self.progress_ratio_stack[self.depth] =
+                self.progress_ratio_stack[self.depth - 1] / (count as f64);
+            self.counters.cells_searched += 1;
+        }
+
+        let progress_frequency_mask = self.progress_callback.frequency_mask;
 
         while self.depth > 0 {
             let (grids_front, grids_back) = self.grids.split_at_mut(self.depth);
@@ -158,23 +182,33 @@ impl Solver {
                 &self.handler_set,
             );
             if has_contradiction {
+                self.counters.progress_ratio += self.progress_ratio_stack[self.depth];
                 self.record_backtrack(cell);
+            }
+            if 0 == self.counters.values_tried & progress_frequency_mask {
+                (self.progress_callback.callback)(&self.counters);
+            }
+            if has_contradiction {
                 continue;
             }
 
             // Check if we have a solution.
             if self.depth == self.shape.num_cells {
                 self.counters.solutions += 1;
+                self.counters.progress_ratio += self.progress_ratio_stack[self.depth];
                 return;
             }
 
             // Find the next cell to try.
-            self.update_cell_order(self.depth);
-            self.counters.cells_searched += 1;
+            let count = self.update_cell_order(self.depth);
             self.depth += 1;
+            self.progress_ratio_stack[self.depth] =
+                self.progress_ratio_stack[self.depth - 1] / (count as f64);
+            self.counters.cells_searched += 1;
         }
 
         self.done = true;
+        (self.progress_callback.callback)(&self.counters);
     }
 
     fn record_backtrack(&mut self, cell: CellIndex) {

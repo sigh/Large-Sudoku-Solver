@@ -117,9 +117,4 @@ impl fmt::Display for ValueSet {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Grid {
-    pub cells: Vec<ValueSet>,
-}
-
 pub type FixedValues = Vec<(CellIndex, CellValue)>;
