@@ -114,7 +114,7 @@ impl Solver {
             for i in 0..self.num_cells {
                 self.cell_accumulator.add(i);
             }
-            if Self::enforce_constraints(
+            if handlers::enforce_constraints(
                 &mut self.grid_stack[0],
                 &mut self.cell_accumulator,
                 &self.handler_set,
@@ -194,7 +194,7 @@ impl Solver {
             // Propograte constraints.
             self.cell_accumulator.add(cell);
             let has_contradiction =
-                !Self::enforce_constraints(grid, &mut self.cell_accumulator, &self.handler_set);
+                !handlers::enforce_constraints(grid, &mut self.cell_accumulator, &self.handler_set);
             if has_contradiction {
                 self.counters.progress_ratio += self.progress_ratio_stack[grid_index + 1];
                 self.record_backtrack(cell);
@@ -262,22 +262,5 @@ impl Solver {
         // Swap the best cell into place.
         (cell_order[best_index], cell_order[cell_index]) =
             (cell_order[cell_index], cell_order[best_index]);
-    }
-
-    fn enforce_constraints(
-        grid: &mut Grid,
-        cell_accumulator: &mut CellAccumulator,
-        handler_set: &HandlerSet,
-    ) -> bool {
-        while let Some(handler_index) = cell_accumulator.pop() {
-            cell_accumulator.hold(handler_index);
-            let handler = &handler_set[handler_index];
-            if !handler.enforce_consistency(grid, cell_accumulator) {
-                cell_accumulator.clear();
-                return false;
-            }
-            cell_accumulator.clear_hold();
-        }
-        true
     }
 }

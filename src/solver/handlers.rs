@@ -3,11 +3,26 @@ use crate::types::Shape;
 use crate::types::ValueSet;
 
 use std::cell::RefCell;
-use std::ops::Deref;
 
 use super::all_different;
 
-type BoxedHandler = Box<dyn ConstraintHandler>;
+pub fn enforce_constraints(
+    grid: &mut [ValueSet],
+    cell_accumulator: &mut CellAccumulator,
+    handler_set: &HandlerSet,
+) -> bool {
+    while let Some(handler_index) = cell_accumulator.pop() {
+        cell_accumulator.hold(handler_index);
+        let handler = &handler_set[handler_index];
+        if !handler.enforce_consistency(grid, cell_accumulator) {
+            cell_accumulator.clear();
+            return false;
+        }
+        cell_accumulator.clear_hold();
+    }
+    true
+}
+
 type HandlerIndex = usize;
 
 pub trait ConstraintHandler {
@@ -24,7 +39,7 @@ pub trait ConstraintHandler {
 }
 
 use all_different::AllDifferentEnforcer;
-struct HouseHandler {
+pub struct HouseHandler {
     cells: Vec<CellIndex>,
     all_values: ValueSet,
     all_diff: RefCell<AllDifferentEnforcer>,
@@ -74,29 +89,7 @@ impl ConstraintHandler for HouseHandler {
     }
 }
 
-pub struct HandlerSet {
-    handlers: Vec<BoxedHandler>,
-}
-
-impl Deref for HandlerSet {
-    type Target = Vec<BoxedHandler>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.handlers
-    }
-}
-
-impl HandlerSet {
-    pub fn new() -> HandlerSet {
-        HandlerSet {
-            handlers: Vec::new(),
-        }
-    }
-
-    pub fn add(&mut self, handler: BoxedHandler) {
-        self.handlers.push(handler);
-    }
-}
+pub type HandlerSet = Vec<HouseHandler>;
 
 fn make_houses(shape: &Shape) -> Vec<Vec<CellIndex>> {
     let mut houses = Vec::new();
@@ -140,8 +133,8 @@ pub fn make_handlers(shape: &Shape) -> HandlerSet {
 
     let houses = make_houses(shape);
     for house in houses {
-        let handler = HouseHandler::new(house.clone(), shape);
-        handler_set.add(Box::new(handler));
+        let handler = HouseHandler::new(house, shape);
+        handler_set.push(handler);
     }
 
     handler_set
