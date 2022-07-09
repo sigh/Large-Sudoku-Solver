@@ -63,17 +63,16 @@ pub struct Counters {
 }
 
 struct Solver {
-    shape: Shape,
-    stack: Vec<CellIndex>,
-    rec_stack: Vec<(bool, usize)>,
-    grids: Vec<Grid>,
+    num_cells: usize,
+    cell_order: Vec<CellIndex>,
+    rec_stack: Vec<usize>,
+    grid_stack: Vec<Grid>,
     cell_conflicts: Vec<CellConflicts>,
     handler_set: HandlerSet,
     cell_accumulator: CellAccumulator,
     backtrack_triggers: Vec<u32>,
     progress_ratio_stack: Vec<f64>,
     counters: Counters,
-    done: bool,
     progress_callback: ProgressCallback,
 }
 
@@ -101,78 +100,88 @@ impl Solver {
         fixed_values: &FixedValues,
         progress_callback: ProgressCallback,
     ) -> Solver {
+        let num_cells = shape.num_cells;
         let handler_set = handlers::make_handlers(shape);
-        let cell_accumulator = CellAccumulator::new(shape.num_cells, &handler_set);
+        let cell_accumulator = CellAccumulator::new(num_cells, &handler_set);
 
-        let empty_grid = vec![ValueSet::full(shape.num_values); shape.num_cells];
-        let mut grids = vec![empty_grid; shape.num_cells + 1];
+        let empty_grid = vec![ValueSet::full(shape.num_values); num_cells];
+        let mut grids = vec![empty_grid; num_cells + 1];
 
         for (cell, value) in fixed_values {
             grids[0][*cell] = ValueSet::from_value(*value);
         }
 
         Solver {
-            shape: *shape,
-            stack: (0..shape.num_cells).collect(),
-            rec_stack: Vec::with_capacity(shape.num_cells),
-            grids,
+            num_cells,
+            cell_order: (0..num_cells).collect(),
+            rec_stack: Vec::with_capacity(num_cells),
+            grid_stack: grids,
             cell_conflicts: make_cell_conflicts(&handler_set, shape),
             handler_set,
             cell_accumulator,
-            backtrack_triggers: vec![0; shape.num_cells],
-            progress_ratio_stack: vec![1.0; shape.num_cells + 1],
+            backtrack_triggers: vec![0; num_cells],
+            progress_ratio_stack: vec![1.0; num_cells + 1],
             counters: Counters::default(),
-            done: false,
             progress_callback,
         }
     }
 
     fn run(&mut self) -> Option<&Grid> {
         let progress_frequency_mask = self.progress_callback.frequency_mask;
+        let mut new_cell_index = false;
 
         if self.counters.cells_searched == 0 {
-            for i in 0..self.shape.num_cells {
+            // Initialize by finding and running all handlers.
+            for i in 0..self.num_cells {
                 self.cell_accumulator.add(i);
             }
-            Self::enforce_constraints(
-                &mut self.grids[0],
+            if Self::enforce_constraints(
+                &mut self.grid_stack[0],
                 &mut self.cell_accumulator,
                 &self.handler_set,
-            );
-            self.rec_stack.push((true, 0));
+            ) {
+                // Only start the search if we successfully enforced constraints.
+                self.rec_stack.push(0);
+                new_cell_index = true;
+            }
         }
 
-        while let Some((first, mut cell_index)) = self.rec_stack.pop() {
+        while let Some(mut cell_index) = self.rec_stack.pop() {
             let grid_index = self.rec_stack.len();
 
-            if cell_index == self.shape.num_cells {
+            // Output a solution if required.
+            if cell_index == self.num_cells {
                 self.counters.solutions += 1;
                 self.counters.progress_ratio += self.progress_ratio_stack[grid_index];
-                return Some(&self.grids[grid_index]);
+                return Some(&self.grid_stack[grid_index]);
             }
 
-            if first {
+            // First time we've seen this cell (on this branch).
+            if new_cell_index {
                 // Skip past all the fixed values.
-                match self.skip_fixed_cells(grid_index, cell_index) {
-                    None => continue,
-                    Some(c) => cell_index = c,
-                }
-                if cell_index == self.shape.num_cells {
-                    self.rec_stack.push((true, cell_index));
+                // NOTE: We can't have zero values here, as they would have been
+                // rejected in the constraint propogation phase.
+                cell_index = self.skip_fixed_cells(grid_index, cell_index);
+
+                // If we are at the end then continue so that we output a solution.
+                if cell_index == self.num_cells {
+                    self.rec_stack.push(cell_index);
                     continue;
                 }
                 self.update_cell_order(grid_index, cell_index);
-                let count = self.grids[grid_index][self.stack[cell_index]].count();
+                let count = self.grid_stack[grid_index][self.cell_order[cell_index]].count();
                 self.progress_ratio_stack[grid_index + 1] =
                     self.progress_ratio_stack[grid_index] / (count as f64);
                 self.counters.cells_searched += 1;
+
+                new_cell_index = false;
             }
 
-            let (grids_front, grids_back) = self.grids.split_at_mut(grid_index + 1);
+            // Now we know that the next cell has multiple values.
 
-            // Handle multi-values.
+            let (grids_front, grids_back) = self.grid_stack.split_at_mut(grid_index + 1);
             let mut grid = &mut grids_front[grid_index];
-            let cell = self.stack[cell_index];
+            let cell = self.cell_order[cell_index];
             let values = &mut grid[cell];
 
             // No more values to try.
@@ -181,7 +190,7 @@ impl Solver {
             }
 
             // We know we want to come back to this depth.
-            self.rec_stack.push((false, cell_index));
+            self.rec_stack.push(cell_index);
 
             // Find the next value to try.
             let value = values.min();
@@ -216,10 +225,10 @@ impl Solver {
             }
 
             // Recurse to the new cell.
-            self.rec_stack.push((true, cell_index + 1));
+            self.rec_stack.push(cell_index + 1);
+            new_cell_index = true;
         }
 
-        self.done = true;
         (self.progress_callback.callback)(&self.counters);
 
         None
@@ -236,23 +245,20 @@ impl Solver {
         self.backtrack_triggers[cell] += 1;
     }
 
-    fn skip_fixed_cells(&mut self, grid_index: usize, mut cell_index: usize) -> Option<usize> {
-        let stack = &mut self.stack;
-        let grid = &mut self.grids[grid_index];
-        for i in cell_index..stack.len() {
-            let cell = stack[i];
+    fn skip_fixed_cells(&mut self, grid_index: usize, mut cell_index: usize) -> usize {
+        let cell_order = &mut self.cell_order;
+        let grid = &mut self.grid_stack[grid_index];
+        for i in cell_index..cell_order.len() {
+            let cell = cell_order[i];
 
-            match grid[cell].count() {
-                0 => return None,
-                1 => {
-                    (stack[i], stack[cell_index]) = (stack[cell_index], stack[i]);
-                    cell_index += 1;
-                    self.counters.values_tried += 1;
-                }
-                _ => {}
+            let count = grid[cell].count();
+            if count <= 1 {
+                (cell_order[i], cell_order[cell_index]) = (cell_order[cell_index], cell_order[i]);
+                cell_index += 1;
+                self.counters.values_tried += 1;
             }
         }
-        Some(cell_index)
+        cell_index
     }
 
     // Find the best cell and bring it to the front. This means that it will
@@ -261,10 +267,10 @@ impl Solver {
         let mut best_index = 0;
         let mut min_score = u32::MAX;
 
-        let stack = &mut self.stack;
-        let grid = &mut self.grids[grid_index];
+        let cell_order = &mut self.cell_order;
+        let grid = &mut self.grid_stack[grid_index];
 
-        for (i, cell) in stack.iter().enumerate().skip(cell_index) {
+        for (i, cell) in cell_order.iter().enumerate().skip(cell_index) {
             let count = grid[*cell].count();
 
             let bt = self.backtrack_triggers[*cell];
@@ -277,7 +283,8 @@ impl Solver {
         }
 
         // Swap the best cell into place.
-        (stack[best_index], stack[cell_index]) = (stack[cell_index], stack[best_index]);
+        (cell_order[best_index], cell_order[cell_index]) =
+            (cell_order[cell_index], cell_order[best_index]);
     }
 
     fn enforce_value(
