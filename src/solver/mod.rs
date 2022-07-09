@@ -264,17 +264,16 @@ impl Solver {
         cell_accumulator: &mut CellAccumulator,
         handler_set: &HandlerSet,
     ) -> bool {
-        cell_accumulator.clear();
         cell_accumulator.add(cell);
 
         for conflict_cell in &cell_conflicts[cell] {
             let values = &mut grid[*conflict_cell];
-            if *values != value {
+            if !(*values & value).is_empty() {
+                values.remove(value);
+                if values.is_empty() {
+                    return false;
+                }
                 cell_accumulator.add(*conflict_cell);
-            }
-            values.remove(value);
-            if values.is_empty() {
-                return false;
             }
         }
 
@@ -290,6 +289,7 @@ impl Solver {
             cell_accumulator.hold(handler_index);
             let handler = &handler_set[handler_index];
             if !handler.enforce_consistency(grid, cell_accumulator) {
+                cell_accumulator.clear();
                 return false;
             }
             cell_accumulator.clear_hold();
