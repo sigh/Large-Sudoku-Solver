@@ -33,25 +33,6 @@ struct ProgressCallback {
 
 type Grid = Vec<ValueSet>;
 
-type CellConflicts = Vec<CellIndex>;
-
-fn make_cell_conflicts(handler_set: &HandlerSet, shape: &Shape) -> Vec<CellConflicts> {
-    let mut result: Vec<CellConflicts> = vec![Vec::new(); shape.num_cells];
-
-    for handler in handler_set.iter() {
-        let conflicts = handler.conflict_set();
-        for c1 in conflicts {
-            for c2 in conflicts {
-                if c1 != c2 {
-                    result[*c1].push(*c2);
-                }
-            }
-        }
-    }
-
-    result
-}
-
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Counters {
     values_tried: u64,
@@ -67,7 +48,6 @@ struct Solver {
     cell_order: Vec<CellIndex>,
     rec_stack: Vec<usize>,
     grid_stack: Vec<Grid>,
-    cell_conflicts: Vec<CellConflicts>,
     handler_set: HandlerSet,
     cell_accumulator: CellAccumulator,
     backtrack_triggers: Vec<u32>,
@@ -116,7 +96,6 @@ impl Solver {
             cell_order: (0..num_cells).collect(),
             rec_stack: Vec::with_capacity(num_cells),
             grid_stack: grids,
-            cell_conflicts: make_cell_conflicts(&handler_set, shape),
             handler_set,
             cell_accumulator,
             backtrack_triggers: vec![0; num_cells],
@@ -168,7 +147,10 @@ impl Solver {
                     self.rec_stack.push(cell_index);
                     continue;
                 }
+                // Find the next cell to explore.
                 self.update_cell_order(grid_index, cell_index);
+
+                // Update counters.
                 let count = self.grid_stack[grid_index][self.cell_order[cell_index]].count();
                 self.progress_ratio_stack[grid_index + 1] =
                     self.progress_ratio_stack[grid_index] / (count as f64);
@@ -210,14 +192,9 @@ impl Solver {
             grid[cell] = value;
 
             // Propograte constraints.
-            let has_contradiction = !Self::enforce_value(
-                grid,
-                value,
-                cell,
-                &self.cell_conflicts,
-                &mut self.cell_accumulator,
-                &self.handler_set,
-            );
+            self.cell_accumulator.add(cell);
+            let has_contradiction =
+                !Self::enforce_constraints(grid, &mut self.cell_accumulator, &self.handler_set);
             if has_contradiction {
                 self.counters.progress_ratio += self.progress_ratio_stack[grid_index + 1];
                 self.record_backtrack(cell);
@@ -285,30 +262,6 @@ impl Solver {
         // Swap the best cell into place.
         (cell_order[best_index], cell_order[cell_index]) =
             (cell_order[cell_index], cell_order[best_index]);
-    }
-
-    fn enforce_value(
-        grid: &mut Grid,
-        value: ValueSet,
-        cell: CellIndex,
-        cell_conflicts: &[CellConflicts],
-        cell_accumulator: &mut CellAccumulator,
-        handler_set: &HandlerSet,
-    ) -> bool {
-        cell_accumulator.add(cell);
-
-        for conflict_cell in &cell_conflicts[cell] {
-            let values = &mut grid[*conflict_cell];
-            if !(*values & value).is_empty() {
-                values.remove(value);
-                if values.is_empty() {
-                    return false;
-                }
-                cell_accumulator.add(*conflict_cell);
-            }
-        }
-
-        Self::enforce_constraints(grid, cell_accumulator, handler_set)
     }
 
     fn enforce_constraints(

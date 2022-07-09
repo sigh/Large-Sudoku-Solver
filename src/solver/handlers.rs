@@ -21,9 +21,6 @@ pub trait ConstraintHandler {
 
     // Cells on which to enforce this constraint.
     fn cells(&self) -> &[CellIndex];
-
-    // Cells which must have mutually exclusive values.
-    fn conflict_set(&self) -> &[CellIndex];
 }
 
 use all_different::AllDifferentEnforcer;
@@ -73,10 +70,6 @@ impl ConstraintHandler for HouseHandler {
     }
 
     fn cells(&self) -> &[CellIndex] {
-        &self.cells
-    }
-
-    fn conflict_set(&self) -> &[CellIndex] {
         &self.cells
     }
 }
