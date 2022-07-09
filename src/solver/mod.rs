@@ -65,6 +65,7 @@ pub struct Counters {
 struct Solver {
     shape: Shape,
     stack: Vec<CellIndex>,
+    rec_stack: Vec<(bool, usize)>,
     grids: Vec<Grid>,
     cell_conflicts: Vec<CellConflicts>,
     handler_set: HandlerSet,
@@ -73,7 +74,6 @@ struct Solver {
     progress_ratio_stack: Vec<f64>,
     counters: Counters,
     done: bool,
-    depth: usize,
     progress_callback: ProgressCallback,
 }
 
@@ -85,12 +85,9 @@ impl Iterator for Solver {
     type Item = SolverOutput;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.run();
-        if self.done {
-            return None;
-        }
+        let grid = self.run()?;
 
-        let solution = self.grids.last().unwrap().iter().map(|vs| vs.value());
+        let solution = grid.iter().map(|vs| vs.value());
 
         Some(Self::Item {
             solution: solution.collect(),
@@ -117,6 +114,7 @@ impl Solver {
         Solver {
             shape: *shape,
             stack: (0..shape.num_cells).collect(),
+            rec_stack: Vec::with_capacity(shape.num_cells),
             grids,
             cell_conflicts: make_cell_conflicts(&handler_set, shape),
             handler_set,
@@ -125,32 +123,56 @@ impl Solver {
             progress_ratio_stack: vec![1.0; shape.num_cells + 1],
             counters: Counters::default(),
             done: false,
-            depth: 0,
             progress_callback,
         }
     }
 
-    fn run(&mut self) {
-        if self.done {
-            return;
-        }
-
-        if self.counters.cells_searched == 0 {
-            let count = self.update_cell_order(self.depth);
-            self.depth += 1;
-            self.progress_ratio_stack[self.depth] =
-                self.progress_ratio_stack[self.depth - 1] / (count as f64);
-            self.counters.cells_searched += 1;
-        }
-
+    fn run(&mut self) -> Option<&Grid> {
         let progress_frequency_mask = self.progress_callback.frequency_mask;
 
-        while self.depth > 0 {
-            let (grids_front, grids_back) = self.grids.split_at_mut(self.depth);
-            self.depth -= 1;
+        if self.counters.cells_searched == 0 {
+            for i in 0..self.shape.num_cells {
+                self.cell_accumulator.add(i);
+            }
+            Self::enforce_constraints(
+                &mut self.grids[0],
+                &mut self.cell_accumulator,
+                &self.handler_set,
+            );
+            self.rec_stack.push((true, 0));
+        }
 
-            let mut grid = &mut grids_front[self.depth];
-            let cell = self.stack[self.depth];
+        while let Some((first, mut cell_index)) = self.rec_stack.pop() {
+            let grid_index = self.rec_stack.len();
+
+            if cell_index == self.shape.num_cells {
+                self.counters.solutions += 1;
+                self.counters.progress_ratio += self.progress_ratio_stack[grid_index];
+                return Some(&self.grids[grid_index]);
+            }
+
+            if first {
+                // Skip past all the fixed values.
+                match self.skip_fixed_cells(grid_index, cell_index) {
+                    None => continue,
+                    Some(c) => cell_index = c,
+                }
+                if cell_index == self.shape.num_cells {
+                    self.rec_stack.push((true, cell_index));
+                    continue;
+                }
+                self.update_cell_order(grid_index, cell_index);
+                let count = self.grids[grid_index][self.stack[cell_index]].count();
+                self.progress_ratio_stack[grid_index + 1] =
+                    self.progress_ratio_stack[grid_index] / (count as f64);
+                self.counters.cells_searched += 1;
+            }
+
+            let (grids_front, grids_back) = self.grids.split_at_mut(grid_index + 1);
+
+            // Handle multi-values.
+            let mut grid = &mut grids_front[grid_index];
+            let cell = self.stack[cell_index];
             let values = &mut grid[cell];
 
             // No more values to try.
@@ -158,14 +180,20 @@ impl Solver {
                 continue;
             }
 
+            // We know we want to come back to this depth.
+            self.rec_stack.push((false, cell_index));
+
             // Find the next value to try.
             let value = values.min();
             self.counters.values_tried += 1;
             self.counters.guesses += (*values != value) as u64;
             values.remove(value);
 
+            if 0 == self.counters.guesses & progress_frequency_mask {
+                (self.progress_callback.callback)(&self.counters);
+            }
+
             // Copy the current cell values.
-            self.depth += 1;
             grids_back[0].copy_from_slice(grid);
 
             // Update the grid with the trial value.
@@ -174,7 +202,7 @@ impl Solver {
 
             // Propograte constraints.
             let has_contradiction = !Self::enforce_value(
-                &mut grid,
+                grid,
                 value,
                 cell,
                 &self.cell_conflicts,
@@ -182,33 +210,19 @@ impl Solver {
                 &self.handler_set,
             );
             if has_contradiction {
-                self.counters.progress_ratio += self.progress_ratio_stack[self.depth];
+                self.counters.progress_ratio += self.progress_ratio_stack[grid_index + 1];
                 self.record_backtrack(cell);
-            }
-            if 0 == self.counters.values_tried & progress_frequency_mask {
-                (self.progress_callback.callback)(&self.counters);
-            }
-            if has_contradiction {
                 continue;
             }
 
-            // Check if we have a solution.
-            if self.depth == self.shape.num_cells {
-                self.counters.solutions += 1;
-                self.counters.progress_ratio += self.progress_ratio_stack[self.depth];
-                return;
-            }
-
-            // Find the next cell to try.
-            let count = self.update_cell_order(self.depth);
-            self.depth += 1;
-            self.progress_ratio_stack[self.depth] =
-                self.progress_ratio_stack[self.depth - 1] / (count as f64);
-            self.counters.cells_searched += 1;
+            // Recurse to the new cell.
+            self.rec_stack.push((true, cell_index + 1));
         }
 
         self.done = true;
         (self.progress_callback.callback)(&self.counters);
+
+        None
     }
 
     fn record_backtrack(&mut self, cell: CellIndex) {
@@ -222,24 +236,36 @@ impl Solver {
         self.backtrack_triggers[cell] += 1;
     }
 
+    fn skip_fixed_cells(&mut self, grid_index: usize, mut cell_index: usize) -> Option<usize> {
+        let stack = &mut self.stack;
+        let grid = &mut self.grids[grid_index];
+        for i in cell_index..stack.len() {
+            let cell = stack[i];
+
+            match grid[cell].count() {
+                0 => return None,
+                1 => {
+                    (stack[i], stack[cell_index]) = (stack[cell_index], stack[i]);
+                    cell_index += 1;
+                    self.counters.values_tried += 1;
+                }
+                _ => {}
+            }
+        }
+        Some(cell_index)
+    }
+
     // Find the best cell and bring it to the front. This means that it will
     // be processed next.
-    fn update_cell_order(&mut self, depth: usize) -> u32 {
+    fn update_cell_order(&mut self, grid_index: usize, cell_index: usize) {
         let mut best_index = 0;
         let mut min_score = u32::MAX;
 
         let stack = &mut self.stack;
-        let grid = &mut self.grids[depth];
+        let grid = &mut self.grids[grid_index];
 
-        for (i, cell) in stack.iter().enumerate().skip(depth) {
+        for (i, cell) in stack.iter().enumerate().skip(cell_index) {
             let count = grid[*cell].count();
-
-            // If we have a single value then just use it - as it will involve no
-            // guessing.
-            if count <= 1 {
-                best_index = i;
-                break;
-            }
 
             let bt = self.backtrack_triggers[*cell];
             let score = if bt > 1 { count / bt } else { count };
@@ -251,9 +277,7 @@ impl Solver {
         }
 
         // Swap the best cell into place.
-        (stack[best_index], stack[depth]) = (stack[depth], stack[best_index]);
-
-        grid[stack[depth]].count()
+        (stack[best_index], stack[cell_index]) = (stack[cell_index], stack[best_index]);
     }
 
     fn enforce_value(
