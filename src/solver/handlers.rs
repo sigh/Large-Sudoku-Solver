@@ -42,6 +42,7 @@ use all_different::AllDifferentEnforcer;
 pub struct HouseHandler {
     cells: Vec<CellIndex>,
     all_values: ValueSet,
+    num_values: u32,
     all_diff: RefCell<AllDifferentEnforcer>,
 }
 
@@ -49,6 +50,7 @@ impl HouseHandler {
     pub fn new(cells: Vec<CellIndex>, shape: &Shape) -> HouseHandler {
         HouseHandler {
             cells,
+            num_values: shape.num_values,
             all_values: ValueSet::full(shape.num_values),
             all_diff: RefCell::new(AllDifferentEnforcer::new(shape.num_values)),
         }
@@ -62,20 +64,18 @@ impl ConstraintHandler for HouseHandler {
         cell_accumulator: &mut CellAccumulator,
     ) -> bool {
         let mut all_values = ValueSet::empty();
-        let mut fixed_values = ValueSet::empty();
+        let mut total_count = 0;
 
-        for cell in &self.cells {
-            let v = grid[*cell];
+        for &cell in &self.cells {
+            let v = grid[cell];
             all_values |= v;
-            if v.count() == 1 {
-                fixed_values |= v;
-            }
+            total_count += v.count();
         }
 
         if all_values != self.all_values {
             return false;
         }
-        if fixed_values == self.all_values {
+        if total_count == self.num_values {
             return true;
         }
 
