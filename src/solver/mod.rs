@@ -287,10 +287,12 @@ impl Solver {
         handler_set: &HandlerSet,
     ) -> bool {
         while let Some(handler_index) = cell_accumulator.pop() {
+            cell_accumulator.hold(handler_index);
             let handler = &handler_set[handler_index];
-            if !handler.enforce_consistency(grid) {
+            if !handler.enforce_consistency(grid, cell_accumulator) {
                 return false;
             }
+            cell_accumulator.clear_hold();
         }
         true
     }

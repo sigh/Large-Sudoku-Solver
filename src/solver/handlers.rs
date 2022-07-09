@@ -2,7 +2,7 @@ use crate::types::CellIndex;
 use crate::types::Shape;
 use crate::types::ValueSet;
 
-use std::num::NonZeroUsize;
+use std::cell::RefCell;
 use std::ops::Deref;
 
 use super::all_different;
@@ -13,7 +13,11 @@ type HandlerIndex = usize;
 pub trait ConstraintHandler {
     // Remove inconsistent values from grid.
     // Return false if the grid is inconsistent.
-    fn enforce_consistency(&self, grid: &mut [ValueSet]) -> bool;
+    fn enforce_consistency(
+        &self,
+        grid: &mut [ValueSet],
+        cell_accumulator: &mut CellAccumulator,
+    ) -> bool;
 
     // Cells on which to enforce this constraint.
     fn cells(&self) -> &[CellIndex];
@@ -22,9 +26,11 @@ pub trait ConstraintHandler {
     fn conflict_set(&self) -> &[CellIndex];
 }
 
+use all_different::AllDifferentEnforcer;
 struct HouseHandler {
     cells: Vec<CellIndex>,
     all_values: ValueSet,
+    all_diff: RefCell<AllDifferentEnforcer>,
 }
 
 impl HouseHandler {
@@ -32,12 +38,17 @@ impl HouseHandler {
         HouseHandler {
             cells,
             all_values: ValueSet::full(shape.num_values),
+            all_diff: RefCell::new(AllDifferentEnforcer::new(shape.num_values)),
         }
     }
 }
 
 impl ConstraintHandler for HouseHandler {
-    fn enforce_consistency(&self, grid: &mut [ValueSet]) -> bool {
+    fn enforce_consistency(
+        &self,
+        grid: &mut [ValueSet],
+        cell_accumulator: &mut CellAccumulator,
+    ) -> bool {
         let mut all_values = ValueSet::empty();
         let mut fixed_values = ValueSet::empty();
 
@@ -56,7 +67,9 @@ impl ConstraintHandler for HouseHandler {
             return true;
         }
 
-        all_different::enforce_all_different(grid, &self.cells)
+        self.all_diff
+            .borrow_mut()
+            .enforce_all_different(grid, &self.cells, cell_accumulator)
     }
 
     fn cells(&self) -> &[CellIndex] {
@@ -142,40 +155,63 @@ pub fn make_handlers(shape: &Shape) -> HandlerSet {
 }
 
 struct IndexLinkedList {
-    linked_list: Vec<Option<NonZeroUsize>>,
-    head: Option<NonZeroUsize>,
+    linked_list: Vec<usize>,
+    head: usize,
+    hold: usize,
 }
 
 impl IndexLinkedList {
+    const NOT_IN_LIST: usize = usize::MAX;
+    const NIL: usize = usize::MAX - 1;
+
     fn new(size: usize) -> IndexLinkedList {
         IndexLinkedList {
-            linked_list: vec![None; size + 1],
-            head: None,
+            linked_list: vec![Self::NOT_IN_LIST; size],
+            head: Self::NIL,
+            hold: Self::NIL,
         }
     }
 
     fn add(&mut self, index: usize) {
-        let offset_index = index + 1;
-        if self.linked_list[offset_index].is_none() {
-            self.linked_list[offset_index] = self.head;
-            self.head = Some(NonZeroUsize::new(offset_index).unwrap());
+        if self.linked_list[index] == Self::NOT_IN_LIST {
+            self.linked_list[index] = self.head;
+            self.head = index;
         }
     }
 
     fn clear(&mut self) {
-        while let Some(offset_index) = self.head {
-            let new_head = self.linked_list[offset_index.get()];
-            self.linked_list[offset_index.get()] = None;
+        while self.head != Self::NIL {
+            let new_head = self.linked_list[self.head];
+            self.linked_list[self.head] = Self::NOT_IN_LIST;
             self.head = new_head;
+        }
+        self.clear_hold();
+    }
+
+    fn clear_hold(&mut self) {
+        while self.hold != Self::NIL {
+            let new_hold = self.linked_list[self.hold];
+            self.linked_list[self.hold] = Self::NOT_IN_LIST;
+            self.hold = new_hold;
         }
     }
 
     fn pop(&mut self) -> Option<usize> {
-        self.head.map(|offset_index| {
-            self.head = self.linked_list[offset_index.get()];
-            self.linked_list[offset_index.get()] = None;
-            offset_index.get() - 1
-        })
+        match self.head {
+            Self::NIL => None,
+            index => {
+                self.head = self.linked_list[index];
+                self.linked_list[index] = Self::NOT_IN_LIST;
+                Some(index)
+            }
+        }
+    }
+
+    fn hold(&mut self, index: usize) {
+        if self.linked_list[index] == Self::NOT_IN_LIST {
+            self.linked_list[index] = self.hold;
+            self.hold = index;
+        }
     }
 }
 
@@ -200,8 +236,8 @@ impl CellAccumulator {
     }
 
     pub fn add(&mut self, cell: CellIndex) {
-        for handler_index in &self.cell_to_handlers[cell] {
-            self.linked_list.add(*handler_index);
+        for &handler_index in &self.cell_to_handlers[cell] {
+            self.linked_list.add(handler_index);
         }
     }
 
@@ -211,5 +247,13 @@ impl CellAccumulator {
 
     pub fn pop(&mut self) -> Option<usize> {
         self.linked_list.pop()
+    }
+
+    pub fn hold(&mut self, index: usize) {
+        self.linked_list.hold(index)
+    }
+
+    pub fn clear_hold(&mut self) {
+        self.linked_list.clear_hold()
     }
 }
