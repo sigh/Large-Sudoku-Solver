@@ -8,11 +8,14 @@ type HandlerIndex = usize;
 
 use crate::solver::all_different::AllDifferentEnforcer;
 
+use super::Contradition;
+use super::SolverResult;
+
 pub fn enforce_constraints(
     grid: &mut [ValueSet],
     cell_accumulator: &mut CellAccumulator,
     handler_set: &HandlerSet,
-) -> bool {
+) -> SolverResult {
     let mut all_different_enforcer = handler_set.all_diff_enforcer.borrow_mut();
 
     while let Some(handler_index) = cell_accumulator.pop() {
@@ -24,13 +27,14 @@ pub fn enforce_constraints(
             }
             ConstraintHandler::SameValue(h) => h.enforce_consistency(grid, cell_accumulator),
         };
-        if !handler_result {
+        if handler_result.is_err() {
             cell_accumulator.clear();
-            return false;
+            return handler_result;
         }
         cell_accumulator.clear_hold();
     }
-    true
+
+    Ok(())
 }
 
 pub struct HouseHandler {
@@ -53,7 +57,7 @@ impl HouseHandler {
         grid: &mut [ValueSet],
         cell_accumulator: &mut CellAccumulator,
         all_diff_enforcer: &mut AllDifferentEnforcer,
-    ) -> bool {
+    ) -> SolverResult {
         let mut all_values = ValueSet::empty();
         let mut total_count = 0;
 
@@ -64,10 +68,10 @@ impl HouseHandler {
         }
 
         if all_values != self.all_values {
-            return false;
+            return Err(Contradition);
         }
         if total_count == self.num_values {
-            return true;
+            return Ok(());
         }
 
         all_diff_enforcer.enforce_all_different(grid, &self.cells, cell_accumulator)
@@ -100,7 +104,7 @@ impl SameValueHandler {
         &self,
         grid: &mut [ValueSet],
         cell_accumulator: &mut CellAccumulator,
-    ) -> bool {
+    ) -> SolverResult {
         // Find the values in each cell set.
         let values0 = self
             .cells0
@@ -116,7 +120,7 @@ impl SameValueHandler {
             .unwrap();
 
         if values0 == values1 {
-            return true;
+            return Ok(());
         }
 
         // Determine all available values.
@@ -124,22 +128,18 @@ impl SameValueHandler {
 
         // Check if we have enough values.
         if (values.count() as usize) < self.cells0.len() {
-            return false;
+            return Err(Contradition);
         }
 
         // Enforce the constrained value set.
         if values0 != values {
-            if !Self::remove_extra_values(grid, values, &self.cells0, cell_accumulator) {
-                return false;
-            }
+            Self::remove_extra_values(grid, values, &self.cells0, cell_accumulator)?
         }
         if values1 != values {
-            if !Self::remove_extra_values(grid, values, &self.cells1, cell_accumulator) {
-                return false;
-            }
+            Self::remove_extra_values(grid, values, &self.cells1, cell_accumulator)?
         }
 
-        true
+        Ok(())
     }
 
     fn remove_extra_values(
@@ -147,18 +147,18 @@ impl SameValueHandler {
         allowed_values: ValueSet,
         cells: &[CellIndex],
         cell_accumulator: &mut CellAccumulator,
-    ) -> bool {
+    ) -> SolverResult {
         for &c0 in cells {
             let v = grid[c0] & allowed_values;
             if v.is_empty() {
-                return false;
+                return Err(Contradition);
             }
             if v != grid[c0] {
                 grid[c0] = v;
                 cell_accumulator.add(c0);
             }
         }
-        true
+        Ok(())
     }
 
     fn cells(&self) -> &[CellIndex] {

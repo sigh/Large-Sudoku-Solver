@@ -4,6 +4,7 @@ use crate::types::CellIndex;
 use crate::value_set::ValueSet;
 
 use super::handlers::CellAccumulator;
+use super::{Contradition, SolverResult};
 
 pub struct AllDifferentEnforcer {
     assignees: Vec<usize>,
@@ -35,16 +36,14 @@ impl AllDifferentEnforcer {
         grid: &mut [ValueSet],
         cells: &[CellIndex],
         cell_accumulator: &mut CellAccumulator,
-    ) -> bool {
+    ) -> SolverResult {
         // Copy over the cell values.
         for (i, &cell) in cells.iter().enumerate() {
             self.cell_nodes[i] = grid[cell];
         }
 
         // Find a maximum matching.
-        if !self.max_matching() {
-            return false;
-        }
+        self.max_matching()?;
 
         // Reverse the edges in the maximum matching.
         for (i, &assignee) in self.assignees.iter().enumerate() {
@@ -65,7 +64,7 @@ impl AllDifferentEnforcer {
             }
         }
 
-        true
+        Ok(())
     }
 
     // https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
@@ -165,7 +164,7 @@ impl AllDifferentEnforcer {
 
     // Max bipartite matching algorith from:
     // https://www.geeksforgeeks.org/maximum-bipartite-matching/
-    fn max_matching(&mut self) -> bool {
+    fn max_matching(&mut self) -> SolverResult {
         let mut assigned = ValueSet::empty();
 
         for i in 0..self.cell_nodes.len() {
@@ -176,18 +175,19 @@ impl AllDifferentEnforcer {
                 self.assignees[v as usize] = i;
                 assigned |= value;
             } else {
-                let matched = self.update_matching(i, assigned);
-                if matched.is_empty() {
-                    return false;
-                }
+                let matched = self.update_matching(i, assigned)?;
                 assigned |= matched;
             }
         }
 
-        true
+        Ok(())
     }
 
-    fn update_matching(&mut self, cell: CellIndex, assigned: ValueSet) -> ValueSet {
+    fn update_matching(
+        &mut self,
+        cell: CellIndex,
+        assigned: ValueSet,
+    ) -> Result<ValueSet, Contradition> {
         let c_stack = &mut self.rec_stack;
         let v_stack = &mut self.data_stack;
         c_stack.clear();
@@ -224,7 +224,7 @@ impl AllDifferentEnforcer {
                     self.assignees[iv] = ic;
                 }
 
-                return next_values.min();
+                return Ok(next_values.min());
             }
 
             // Otherwise we need to recurse because v is assigned, and that
@@ -233,6 +233,6 @@ impl AllDifferentEnforcer {
             c_stack.push(next_c);
         }
 
-        ValueSet::empty()
+        Err(Contradition)
     }
 }

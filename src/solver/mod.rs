@@ -26,6 +26,10 @@ pub fn solve(shape: &Shape, fixed_values: &FixedValues) {
     }
 }
 
+pub struct Contradition;
+
+pub type SolverResult = Result<(), Contradition>;
+
 struct ProgressCallback {
     callback: fn(&Counters),
     frequency_mask: u64,
@@ -118,7 +122,9 @@ impl Solver {
                 &mut self.grid_stack[0],
                 &mut self.cell_accumulator,
                 &self.handler_set,
-            ) {
+            )
+            .is_ok()
+            {
                 // Only start the search if we successfully enforced constraints.
                 self.rec_stack.push(0);
                 new_cell_index = true;
@@ -188,17 +194,19 @@ impl Solver {
 
             // Propograte constraints.
             self.cell_accumulator.add(cell);
-            let has_contradiction =
-                !handlers::enforce_constraints(grid, &mut self.cell_accumulator, &self.handler_set);
-            if has_contradiction {
-                self.counters.progress_ratio += self.progress_ratio_stack[grid_index + 1];
-                self.record_backtrack(cell);
-                continue;
+            match handlers::enforce_constraints(grid, &mut self.cell_accumulator, &self.handler_set)
+            {
+                Ok(()) => {
+                    // Recurse to the new cell.
+                    self.rec_stack.push(cell_index + 1);
+                    new_cell_index = true;
+                }
+                Err(Contradition) => {
+                    // Backtrack.
+                    self.counters.progress_ratio += self.progress_ratio_stack[grid_index + 1];
+                    self.record_backtrack(cell);
+                }
             }
-
-            // Recurse to the new cell.
-            self.rec_stack.push(cell_index + 1);
-            new_cell_index = true;
         }
 
         // Send the final set of progress counters.
