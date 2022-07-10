@@ -13,7 +13,7 @@ use self::handlers::CellAccumulator;
 pub fn solve(shape: &Shape, fixed_values: &FixedValues) {
     const LOG_UPDATE_FREQUENCY: u64 = 12;
     let progress_callback = ProgressCallback {
-        callback: |counters| println!("{:?}", counters),
+        callback: |counters| eprintln!("{:?}", counters),
         frequency_mask: (1 << LOG_UPDATE_FREQUENCY) - 1,
     };
     let solver = Solver::new(shape, fixed_values, progress_callback);
@@ -128,25 +128,22 @@ impl Solver {
         while let Some(mut cell_index) = self.rec_stack.pop() {
             let grid_index = self.rec_stack.len();
 
-            // Output a solution if required.
-            if cell_index == self.num_cells {
-                self.counters.solutions += 1;
-                self.counters.progress_ratio += self.progress_ratio_stack[grid_index];
-                return Some(&self.grid_stack[grid_index]);
-            }
-
             // First time we've seen this cell (on this branch).
             if new_cell_index {
+                new_cell_index = false;
+
                 // Skip past all the fixed values.
                 // NOTE: We can't have zero values here, as they would have been
                 // rejected in the constraint propogation phase.
                 cell_index = self.skip_fixed_cells(grid_index, cell_index);
 
-                // If we are at the end then continue so that we output a solution.
+                // We've reached the end, so output a solution!
                 if cell_index == self.num_cells {
-                    self.rec_stack.push(cell_index);
-                    continue;
+                    self.counters.solutions += 1;
+                    self.counters.progress_ratio += self.progress_ratio_stack[grid_index];
+                    return Some(&self.grid_stack[grid_index]);
                 }
+
                 // Find the next cell to explore.
                 self.update_cell_order(grid_index, cell_index);
 
@@ -155,11 +152,9 @@ impl Solver {
                 self.progress_ratio_stack[grid_index + 1] =
                     self.progress_ratio_stack[grid_index] / (count as f64);
                 self.counters.cells_searched += 1;
-
-                new_cell_index = false;
             }
 
-            // Now we know that the next cell has multiple values.
+            // Now we know that the next cell has (or had) multiple values.
 
             let (grids_front, grids_back) = self.grid_stack.split_at_mut(grid_index + 1);
             let mut grid = &mut grids_front[grid_index];
@@ -206,6 +201,7 @@ impl Solver {
             new_cell_index = true;
         }
 
+        // Send the final set of progress counters.
         (self.progress_callback.callback)(&self.counters);
 
         None
@@ -215,8 +211,8 @@ impl Solver {
         const BACKTRACK_DECAY_INTERVAL: u64 = 100;
         self.counters.backtracks += 1;
         if 0 == self.counters.backtracks % BACKTRACK_DECAY_INTERVAL {
-            for i in 0..self.backtrack_triggers.len() {
-                self.backtrack_triggers[i] >>= 1;
+            for bt in &mut self.backtrack_triggers {
+                *bt >>= 1;
             }
         }
         self.backtrack_triggers[cell] += 1;
@@ -225,12 +221,13 @@ impl Solver {
     fn skip_fixed_cells(&mut self, grid_index: usize, mut cell_index: usize) -> usize {
         let cell_order = &mut self.cell_order;
         let grid = &mut self.grid_stack[grid_index];
+
         for i in cell_index..cell_order.len() {
             let cell = cell_order[i];
 
             let count = grid[cell].count();
             if count <= 1 {
-                (cell_order[i], cell_order[cell_index]) = (cell_order[cell_index], cell_order[i]);
+                cell_order.swap(i, cell_index);
                 cell_index += 1;
                 self.counters.values_tried += 1;
             }
@@ -241,26 +238,22 @@ impl Solver {
     // Find the best cell and bring it to the front. This means that it will
     // be processed next.
     fn update_cell_order(&mut self, grid_index: usize, cell_index: usize) {
-        let mut best_index = 0;
-        let mut min_score = u32::MAX;
-
         let cell_order = &mut self.cell_order;
         let grid = &mut self.grid_stack[grid_index];
 
-        for (i, cell) in cell_order.iter().enumerate().skip(cell_index) {
-            let count = grid[*cell].count();
-
-            let bt = self.backtrack_triggers[*cell];
-            let score = if bt > 1 { count / bt } else { count };
-
-            if score < min_score {
-                best_index = i;
-                min_score = score;
-            }
-        }
+        let (best_index, _) = cell_order
+            .iter()
+            .enumerate()
+            .skip(cell_index)
+            .min_by_key(|(_, cell)| {
+                let count = grid[**cell].count();
+                let bt = self.backtrack_triggers[**cell];
+                let score = if bt > 1 { count / bt } else { count };
+                score
+            })
+            .unwrap();
 
         // Swap the best cell into place.
-        (cell_order[best_index], cell_order[cell_index]) =
-            (cell_order[cell_index], cell_order[best_index]);
+        cell_order.swap(best_index, cell_index);
     }
 }
