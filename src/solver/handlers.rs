@@ -203,42 +203,32 @@ fn make_houses(constraint: &Constraint) -> Vec<Vec<CellIndex>> {
 
     // Make rows.
     for r in 0..side_len {
-        let mut house = vec![0; side_len as usize];
-        for c in 0..side_len {
-            house[c as usize] = shape.make_cell_index(r, c);
-        }
-        houses.push(house);
+        let f = |c| shape.make_cell_index(r, c);
+        houses.push((0..side_len).map(f).collect());
     }
 
     // Make columns.
     for c in 0..side_len {
-        let mut house = vec![0; side_len as usize];
-        for r in 0..side_len {
-            house[r as usize] = shape.make_cell_index(r, c);
-        }
-        houses.push(house);
+        let f = |r| shape.make_cell_index(r, c);
+        houses.push((0..side_len).map(f).collect());
     }
 
     // Make boxes.
     for b in 0..side_len {
-        let mut house = vec![0; side_len as usize];
-        for i in 0..side_len {
+        let f = |i| {
             let r = (b % box_size) * box_size + (i / box_size);
             let c = (b / box_size) * box_size + (i % box_size);
-            house[i as usize] = shape.make_cell_index(r, c);
-        }
-        houses.push(house);
+            shape.make_cell_index(r, c)
+        };
+        houses.push((0..side_len).map(f).collect());
     }
 
     if constraint.sudoku_x {
-        for dir in [1, -1] {
-            let mut house = vec![0; side_len as usize];
-            for r in 0..side_len {
-                let c = if dir > 0 { side_len - r - 1 } else { r };
-                house[r as usize] = shape.make_cell_index(r, c);
-            }
-            houses.push(house);
-        }
+        let f = |r| shape.make_cell_index(r, r);
+        houses.push((0..side_len).map(f).collect());
+
+        let f = |r| shape.make_cell_index(r, side_len - r - 1);
+        houses.push((0..side_len).map(f).collect());
     }
 
     houses
@@ -252,15 +242,13 @@ fn array_difference<T: PartialEq + Copy>(v0: &[T], v1: &[T]) -> Vec<T> {
     v0.iter().filter(|e| !v1.contains(e)).copied().collect()
 }
 
-fn make_house_intersections(houses: &Vec<Vec<CellIndex>>, shape: &Shape) -> Vec<ConstraintHandler> {
+fn make_house_intersections(houses: &[Vec<CellIndex>], shape: &Shape) -> Vec<ConstraintHandler> {
     let box_size = shape.box_size as usize;
 
     let mut handlers = Vec::new();
 
-    for i in 0..houses.len() {
-        let h0 = &houses[i];
-        for j in i + 1..houses.len() {
-            let h1 = &houses[j];
+    for (i, h0) in houses.iter().enumerate() {
+        for h1 in houses.iter().skip(i + 1) {
             if array_intersection_size(h0, h1) == box_size {
                 let handler =
                     SameValueHandler::new(array_difference(h0, h1), array_difference(h1, h0));

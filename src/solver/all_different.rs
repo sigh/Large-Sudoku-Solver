@@ -163,7 +163,9 @@ impl AllDifferentEnforcer {
     }
 
     // Max bipartite matching algorith from:
-    // https://www.geeksforgeeks.org/maximum-bipartite-matching/
+    // Implementation of the Ford–Fulkerson algorithm method.
+    // https://en.wikipedia.org/wiki/Ford%E2%80%93Fulkerson_algorithm
+    // See also https://www.geeksforgeeks.org/maximum-bipartite-matching/
     fn max_matching(&mut self) -> SolverResult {
         let mut assigned = ValueSet::empty();
 
