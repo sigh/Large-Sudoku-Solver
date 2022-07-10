@@ -1,6 +1,7 @@
 use std::{cmp, iter::zip};
 
-use crate::types::{CellIndex, ValueSet};
+use crate::types::CellIndex;
+use crate::value_set::ValueSet;
 
 use super::handlers::CellAccumulator;
 

@@ -1,6 +1,6 @@
 use crate::types::CellIndex;
 use crate::types::Shape;
-use crate::types::ValueSet;
+use crate::value_set::ValueSet;
 
 use std::cell::RefCell;
 

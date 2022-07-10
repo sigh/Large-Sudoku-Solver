@@ -6,7 +6,7 @@ use crate::types::CellIndex;
 use crate::types::CellValue;
 use crate::types::FixedValues;
 use crate::types::Shape;
-use crate::types::ValueSet;
+use crate::value_set::ValueSet;
 
 use self::handlers::CellAccumulator;
 
