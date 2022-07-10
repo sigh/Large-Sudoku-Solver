@@ -212,7 +212,7 @@ impl Solver {
     }
 
     fn record_backtrack(&mut self, cell: CellIndex) {
-        const BACKTRACK_DECAY_INTERVAL: u64 = 100 * 100;
+        const BACKTRACK_DECAY_INTERVAL: u64 = 100;
         self.counters.backtracks += 1;
         if 0 == self.counters.backtracks % BACKTRACK_DECAY_INTERVAL {
             for i in 0..self.backtrack_triggers.len() {
