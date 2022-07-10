@@ -1,5 +1,5 @@
-use std::fmt;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
+use std::{fmt, mem};
 
 use crate::types::CellValue;
 
@@ -7,6 +7,8 @@ use crate::types::CellValue;
 pub struct ValueSet(i64);
 
 impl ValueSet {
+    pub const BITS: u32 = (mem::size_of::<Self>() as u32) * u8::BITS;
+
     pub fn from_value(value: CellValue) -> ValueSet {
         ValueSet(1 << (value - 1))
     }
@@ -16,7 +18,11 @@ impl ValueSet {
     }
 
     pub fn full(num_values: u32) -> ValueSet {
-        ValueSet((1 << num_values) - 1)
+        ValueSet(if num_values == Self::BITS {
+            -1
+        } else {
+            !(-1 << num_values)
+        })
     }
 
     pub fn max() -> ValueSet {
