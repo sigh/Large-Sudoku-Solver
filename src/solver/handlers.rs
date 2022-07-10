@@ -18,7 +18,13 @@ pub fn enforce_constraints(
     while let Some(handler_index) = cell_accumulator.pop() {
         cell_accumulator.hold(handler_index);
         let handler = &handler_set.handlers[handler_index];
-        if !handler.enforce_consistency(grid, cell_accumulator, &mut all_different_enforcer) {
+        let handler_result = match handler {
+            ConstraintHandler::House(h) => {
+                h.enforce_consistency(grid, cell_accumulator, &mut all_different_enforcer)
+            }
+            ConstraintHandler::SameValue(h) => h.enforce_consistency(grid, cell_accumulator),
+        };
+        if !handler_result {
             cell_accumulator.clear();
             return false;
         }
@@ -72,8 +78,110 @@ impl HouseHandler {
     }
 }
 
+pub struct SameValueHandler {
+    cells: Vec<CellIndex>,
+    cells0: Vec<CellIndex>,
+    cells1: Vec<CellIndex>,
+}
+
+impl SameValueHandler {
+    pub fn new(cells0: Vec<CellIndex>, cells1: Vec<CellIndex>) -> SameValueHandler {
+        let mut cells = Vec::new();
+        cells.extend(cells0.iter());
+        cells.extend(cells1.iter());
+        SameValueHandler {
+            cells,
+            cells0,
+            cells1,
+        }
+    }
+
+    fn enforce_consistency(
+        &self,
+        grid: &mut [ValueSet],
+        cell_accumulator: &mut CellAccumulator,
+    ) -> bool {
+        // Find the values in each cell set.
+        let values0 = self
+            .cells0
+            .iter()
+            .map(|&c| grid[c])
+            .reduce(|a, b| a | b)
+            .unwrap();
+        let values1 = self
+            .cells1
+            .iter()
+            .map(|&c| grid[c])
+            .reduce(|a, b| a | b)
+            .unwrap();
+
+        if values0 == values1 {
+            return true;
+        }
+
+        // Determine all available values.
+        let values = values0 & values1;
+
+        // Check if we have enough values.
+        if (values.count() as usize) < self.cells0.len() {
+            return false;
+        }
+
+        // Enforce the constrained value set.
+        if values0 != values {
+            if !Self::remove_extra_values(grid, values, &self.cells0, cell_accumulator) {
+                return false;
+            }
+        }
+        if values1 != values {
+            if !Self::remove_extra_values(grid, values, &self.cells1, cell_accumulator) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    fn remove_extra_values(
+        grid: &mut [ValueSet],
+        allowed_values: ValueSet,
+        cells: &[CellIndex],
+        cell_accumulator: &mut CellAccumulator,
+    ) -> bool {
+        for &c0 in cells {
+            let v = grid[c0] & allowed_values;
+            if v.is_empty() {
+                return false;
+            }
+            if v != grid[c0] {
+                grid[c0] = v;
+                cell_accumulator.add(c0);
+            }
+        }
+        true
+    }
+
+    fn cells(&self) -> &[CellIndex] {
+        &self.cells
+    }
+}
+
+enum ConstraintHandler {
+    House(HouseHandler),
+    SameValue(SameValueHandler),
+}
+
+impl ConstraintHandler {
+    fn cells(&self) -> &[CellIndex] {
+        match self {
+            ConstraintHandler::House(h) => h.cells(),
+            ConstraintHandler::SameValue(h) => h.cells(),
+        }
+    }
+}
+
 pub struct HandlerSet {
-    handlers: Vec<HouseHandler>,
+    handlers: Vec<ConstraintHandler>,
     all_diff_enforcer: RefCell<AllDifferentEnforcer>,
 }
 
@@ -123,14 +231,46 @@ fn make_houses(shape: &Shape) -> Vec<Vec<CellIndex>> {
     houses
 }
 
+fn array_intersection_size<T: PartialEq>(v0: &[T], v1: &[T]) -> usize {
+    v0.iter().filter(|e| v1.contains(e)).count()
+}
+
+fn array_difference<T: PartialEq + Copy>(v0: &[T], v1: &[T]) -> Vec<T> {
+    v0.iter().filter(|e| !v1.contains(e)).copied().collect()
+}
+
+fn make_house_intersections(houses: &Vec<Vec<CellIndex>>, shape: &Shape) -> Vec<ConstraintHandler> {
+    let box_size = shape.box_size as usize;
+
+    let mut handlers = Vec::new();
+
+    for i in 0..houses.len() {
+        let h0 = &houses[i];
+        for j in i + 1..houses.len() {
+            let h1 = &houses[j];
+            if array_intersection_size(h0, h1) == box_size {
+                let handler =
+                    SameValueHandler::new(array_difference(h0, h1), array_difference(h1, h0));
+                handlers.push(ConstraintHandler::SameValue(handler));
+            }
+        }
+    }
+
+    handlers
+}
+
 pub fn make_handlers(shape: &Shape) -> HandlerSet {
     let mut handler_set = HandlerSet::new(shape);
 
     let houses = make_houses(shape);
+    let mut intersection_handlers = make_house_intersections(&houses, shape);
+
     for house in houses {
-        let handler = HouseHandler::new(house, shape);
+        let handler = ConstraintHandler::House(HouseHandler::new(house, shape));
         handler_set.handlers.push(handler);
     }
+
+    handler_set.handlers.append(&mut intersection_handlers);
 
     handler_set
 }

@@ -166,7 +166,7 @@ impl Solver {
                 continue;
             }
 
-            // We know we want to come back to this depth.
+            // We know we want to come back to this index.
             self.rec_stack.push(cell_index);
 
             // Find the next value to try.
