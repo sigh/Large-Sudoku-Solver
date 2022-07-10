@@ -4,19 +4,18 @@ mod handlers;
 use crate::solver::handlers::HandlerSet;
 use crate::types::CellIndex;
 use crate::types::CellValue;
-use crate::types::FixedValues;
-use crate::types::Shape;
+use crate::types::Constraint;
 use crate::value_set::ValueSet;
 
 use self::handlers::CellAccumulator;
 
-pub fn solve(shape: &Shape, fixed_values: &FixedValues) {
+pub fn solve(constraint: &Constraint) {
     const LOG_UPDATE_FREQUENCY: u64 = 12;
     let progress_callback = ProgressCallback {
         callback: |counters| eprintln!("{:?}", counters),
         frequency_mask: (1 << LOG_UPDATE_FREQUENCY) - 1,
     };
-    let solver = Solver::new(shape, fixed_values, progress_callback);
+    let solver = Solver::new(constraint, progress_callback);
 
     for (i, result) in solver.enumerate() {
         if i > 1 {
@@ -79,19 +78,15 @@ impl Iterator for Solver {
 }
 
 impl Solver {
-    fn new(
-        shape: &Shape,
-        fixed_values: &FixedValues,
-        progress_callback: ProgressCallback,
-    ) -> Solver {
-        let num_cells = shape.num_cells;
-        let handler_set = handlers::make_handlers(shape);
+    fn new(constraint: &Constraint, progress_callback: ProgressCallback) -> Solver {
+        let num_cells = constraint.shape.num_cells;
+        let handler_set = handlers::make_handlers(&constraint);
         let cell_accumulator = CellAccumulator::new(num_cells, &handler_set);
 
-        let empty_grid = vec![ValueSet::full(shape.num_values); num_cells];
+        let empty_grid = vec![ValueSet::full(constraint.shape.num_values); num_cells];
         let mut grids = vec![empty_grid; num_cells + 1];
 
-        for (cell, value) in fixed_values {
+        for (cell, value) in &constraint.fixed_values {
             grids[0][*cell] = ValueSet::from_value(*value);
         }
 

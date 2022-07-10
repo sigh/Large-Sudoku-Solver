@@ -14,7 +14,7 @@ fn main() {
     let filename = &args[1];
     let input = fs::read_to_string(filename).expect("Something went wrong reading the input.");
 
-    let (shape, fixed_values) = parser::parse_text(&input).expect("Could not parse input file.");
+    let constraint = parser::parse_text(&input).expect("Could not parse input file.");
 
-    solver::solve(&shape, &fixed_values);
+    solver::solve(&constraint);
 }

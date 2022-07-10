@@ -1,4 +1,5 @@
 use crate::types::CellIndex;
+use crate::types::Constraint;
 use crate::types::Shape;
 use crate::value_set::ValueSet;
 
@@ -194,8 +195,9 @@ impl HandlerSet {
     }
 }
 
-fn make_houses(shape: &Shape) -> Vec<Vec<CellIndex>> {
+fn make_houses(constraint: &Constraint) -> Vec<Vec<CellIndex>> {
     let mut houses = Vec::new();
+    let shape = &constraint.shape;
     let side_len = shape.side_len;
     let box_size = shape.box_size;
 
@@ -226,6 +228,17 @@ fn make_houses(shape: &Shape) -> Vec<Vec<CellIndex>> {
             house[i as usize] = shape.make_cell_index(r, c);
         }
         houses.push(house);
+    }
+
+    if constraint.sudoku_x {
+        for dir in [1, -1] {
+            let mut house = vec![0; side_len as usize];
+            for r in 0..side_len {
+                let c = if dir > 0 { side_len - r - 1 } else { r };
+                house[r as usize] = shape.make_cell_index(r, c);
+            }
+            houses.push(house);
+        }
     }
 
     houses
@@ -259,10 +272,12 @@ fn make_house_intersections(houses: &Vec<Vec<CellIndex>>, shape: &Shape) -> Vec<
     handlers
 }
 
-pub fn make_handlers(shape: &Shape) -> HandlerSet {
+pub fn make_handlers(constraint: &Constraint) -> HandlerSet {
+    let shape = &constraint.shape;
+
     let mut handler_set = HandlerSet::new(shape);
 
-    let houses = make_houses(shape);
+    let houses = make_houses(constraint);
     let mut intersection_handlers = make_house_intersections(&houses, shape);
 
     for house in houses {
