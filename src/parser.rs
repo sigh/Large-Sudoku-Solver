@@ -8,11 +8,8 @@ use crate::types::Shape;
 pub fn parse_text(input: &str) -> Option<Constraint> {
     let mut input = String::from(input);
 
-    let mut sudoku_x = false;
-    if let Ok(new_input) = extract_sodoku_x(&input) {
-        input = new_input;
-        sudoku_x = true;
-    }
+    remove_comments(&mut input);
+    let sudoku_x = extract_sodoku_x(&mut input);
 
     let mut parsed = None;
     parsed = parsed.or_else(|| parse_short_text(&input));
@@ -24,19 +21,25 @@ pub fn parse_text(input: &str) -> Option<Constraint> {
     Some(constraint)
 }
 
-fn extract_sodoku_x(input: &str) -> Result<String, ()> {
+fn remove_comments(input: &mut String) {
+    lazy_static! {
+        static ref COMMENT_REGEX: Regex = Regex::new("(?m)#.*$").unwrap();
+    }
+
+    *input = COMMENT_REGEX.replace(input, "").to_string();
+}
+
+fn extract_sodoku_x(input: &mut String) -> bool {
     lazy_static! {
         static ref SUDOKU_X_REGEX: Regex = Regex::new("(?i)sudoku[ -]x").unwrap();
     }
 
-    let result = SUDOKU_X_REGEX.replace(input, "");
-
-    // We didn't change anything.
-    if result.len() == input.len() {
-        return Err(());
+    if !SUDOKU_X_REGEX.is_match(input) {
+        return false;
     }
 
-    Ok(result.to_string())
+    *input = SUDOKU_X_REGEX.replace(input, "").to_string();
+    true
 }
 
 fn remove_whitespace(s: &mut String) {

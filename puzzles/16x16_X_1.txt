@@ -1,3 +1,4 @@
+# From http://forum.enjoysudoku.com/giant-sudokus-t39758-15.html#p316646
 Sudoku X
 . . . . 16 12 . . . . 7 3 . . . .
 . . . . . 2 . 7 4 . 11 . . . . .
