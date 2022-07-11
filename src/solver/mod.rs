@@ -181,21 +181,18 @@ impl Solver {
             let (grids_front, grids_back) = self.grid_stack.split_at_mut(grid_index + 1);
             let mut grid = &mut grids_front[grid_index];
             let cell = self.cell_order[cell_index];
-            let values = &mut grid[cell];
 
-            // No more values to try.
-            if values.is_empty() {
-                continue;
-            }
+            // Find the next value to try.
+            let value = match grid[cell].pop() {
+                None => continue,
+                Some(value) => value,
+            };
 
             // We know we want to come back to this index.
             self.rec_stack.push(cell_index);
 
-            // Find the next value to try.
-            let value = values.min();
             self.counters.values_tried += 1;
-            self.counters.guesses += (*values != value) as u64;
-            values.remove(value);
+            self.counters.guesses += grid[cell].is_empty() as u64;
 
             if 0 == self.counters.guesses & progress_frequency_mask {
                 (self.progress_callback.callback)(&self.counters);

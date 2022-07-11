@@ -125,9 +125,7 @@ impl AllDifferentEnforcer {
 
                 // Handle any adjacent nodes already in the stack.
                 let mut stack_adj = cell_nodes[u] & inv_stack_member;
-                while !stack_adj.is_empty() {
-                    let node = stack_adj.min();
-                    stack_adj.remove(node);
+                while let Some(node) = stack_adj.pop() {
                     let n = assignees[node.value0() as usize];
                     lowlinks[u] = cmp::min(lowlinks[u], ids[n]);
                 }
