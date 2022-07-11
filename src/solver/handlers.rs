@@ -15,13 +15,13 @@ use super::SolverResult;
 pub fn enforce_constraints(
     grid: &mut [ValueSet],
     cell_accumulator: &mut CellAccumulator,
-    handler_set: &HandlerSet,
+    handler_set: &mut HandlerSet,
 ) -> SolverResult {
     let mut all_different_enforcer = handler_set.all_diff_enforcer.borrow_mut();
 
     while let Some(handler_index) = cell_accumulator.pop() {
         cell_accumulator.hold(handler_index);
-        let handler = &handler_set.handlers[handler_index];
+        let handler = &mut handler_set.handlers[handler_index];
         match handler {
             ConstraintHandler::House(h) => {
                 h.enforce_consistency(grid, cell_accumulator, &mut all_different_enforcer)
@@ -43,6 +43,7 @@ pub struct HouseHandler {
     cells: Vec<CellIndex>,
     all_values: ValueSet,
     num_values: u32,
+    candidate_matching: Vec<ValueSet>,
 }
 
 impl HouseHandler {
@@ -51,11 +52,12 @@ impl HouseHandler {
             cells,
             num_values: shape.num_values,
             all_values: ValueSet::full(shape.num_values),
+            candidate_matching: vec![ValueSet::empty(); shape.num_values as usize],
         }
     }
 
     fn enforce_consistency(
-        &self,
+        &mut self,
         grid: &mut [ValueSet],
         cell_accumulator: &mut CellAccumulator,
         all_diff_enforcer: &mut AllDifferentEnforcer,
@@ -76,7 +78,12 @@ impl HouseHandler {
             return Ok(());
         }
 
-        all_diff_enforcer.enforce_all_different(grid, &self.cells, cell_accumulator)
+        all_diff_enforcer.enforce_all_different(
+            grid,
+            &self.cells,
+            &mut self.candidate_matching,
+            cell_accumulator,
+        )
     }
 
     fn cells(&self) -> &[CellIndex] {

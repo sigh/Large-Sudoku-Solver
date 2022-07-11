@@ -8,7 +8,6 @@ use super::{Contradition, SolverResult};
 
 pub struct AllDifferentEnforcer {
     assignees: Vec<usize>,
-    assignees_inv: Vec<ValueSet>,
     ids: Vec<u8>,
     lowlinks: Vec<u8>,
     rec_stack: Vec<usize>,
@@ -21,7 +20,6 @@ impl AllDifferentEnforcer {
         let num_values = num_values as usize;
         AllDifferentEnforcer {
             assignees: vec![0; num_values],
-            assignees_inv: vec![ValueSet::empty(); num_values],
             ids: vec![0; num_values],
             lowlinks: vec![0; num_values],
             rec_stack: Vec::with_capacity(num_values),
@@ -35,6 +33,7 @@ impl AllDifferentEnforcer {
         &mut self,
         grid: &mut [ValueSet],
         cells: &[CellIndex],
+        candidate_matching: &mut [ValueSet],
         cell_accumulator: &mut CellAccumulator,
     ) -> SolverResult {
         // Copy over the cell values.
@@ -43,18 +42,18 @@ impl AllDifferentEnforcer {
         }
 
         // Find a maximum matching.
-        self.max_matching()?;
+        // A candidate mapping is taken in as a hint. The updated mapping is
+        // returned to the caller so that we can use the hint next iteration.
+        self.max_matching(candidate_matching)?;
 
-        // Reverse the edges in the maximum matching.
-        for (i, &assignee) in self.assignees.iter().enumerate() {
-            let i_set = ValueSet::from_value0(i as u32);
-            self.cell_nodes[assignee] &= !i_set;
-            self.assignees_inv[assignee] = i_set;
+        // Remove the forward edges in the maximum matching.
+        for (cell_node, &candidate) in zip(self.cell_nodes.iter_mut(), candidate_matching.iter()) {
+            *cell_node &= !candidate;
         }
 
         // Find and remove strongly-connected components in the
         // implicit directed graph.
-        self.remove_scc();
+        self.remove_scc(candidate_matching);
 
         // Remove any remaining edges as they are impossible assignments.
         for (i, cell_node) in self.cell_nodes.iter().enumerate() {
@@ -68,14 +67,13 @@ impl AllDifferentEnforcer {
     }
 
     // https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
-    fn remove_scc(&mut self) {
+    fn remove_scc(&mut self, assignees_inv: &[ValueSet]) {
         let rec_stack = &mut self.rec_stack;
         let scc_stack = &mut self.data_stack;
         let ids = &mut self.ids;
         let lowlinks = &mut self.lowlinks;
-        let assignees_inv = &mut self.assignees_inv;
         let cell_nodes = &mut self.cell_nodes;
-        let assignees = &mut self.assignees;
+        let assignees = &self.assignees;
 
         rec_stack.clear();
         scc_stack.clear();
@@ -164,20 +162,47 @@ impl AllDifferentEnforcer {
     // Implementation of the Ford–Fulkerson algorithm method.
     // https://en.wikipedia.org/wiki/Ford%E2%80%93Fulkerson_algorithm
     // See also https://www.geeksforgeeks.org/maximum-bipartite-matching/
-    fn max_matching(&mut self) -> SolverResult {
-        let mut assigned = ValueSet::empty();
+    fn max_matching(&mut self, candidate_matching: &mut [ValueSet]) -> SolverResult {
+        let num_cells = self.cell_nodes.len();
 
-        for i in 0..self.cell_nodes.len() {
-            let values = self.cell_nodes[i] & !assigned;
-            if !values.is_empty() {
+        let mut assigned_values = ValueSet::empty();
+
+        // Prefill using the candidate mapping.
+        for i in 0..num_cells {
+            let candidate = candidate_matching[i];
+            if !(candidate & self.cell_nodes[i]).is_empty() {
+                assigned_values |= candidate;
+                self.assignees[candidate.value0() as usize] = i;
+            }
+        }
+
+        // If we assigned all the values we can bail early.
+        if assigned_values.count() as usize == num_cells {
+            return Ok(());
+        }
+
+        for i in 0..num_cells {
+            // Skip assigned nodes.
+            if !(candidate_matching[i] & self.cell_nodes[i]).is_empty() {
+                continue;
+            }
+
+            let values = self.cell_nodes[i] & !assigned_values;
+            assigned_values |= if !values.is_empty() {
+                // If there is a free assignment, take it.
                 let value = values.min();
                 let v = value.value0();
                 self.assignees[v as usize] = i;
-                assigned |= value;
+                value
             } else {
-                let matched = self.update_matching(i, assigned)?;
-                assigned |= matched;
-            }
+                // Otherwise, find a free value and update the matching.
+                self.update_matching(i, assigned_values)?
+            };
+        }
+
+        for (i, &assignee) in self.assignees.iter().enumerate() {
+            let i_set = ValueSet::from_value0(i as u32);
+            candidate_matching[assignee] = i_set;
         }
 
         Ok(())

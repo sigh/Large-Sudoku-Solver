@@ -137,7 +137,7 @@ impl Solver {
             if handlers::enforce_constraints(
                 &mut self.grid_stack[0],
                 &mut self.cell_accumulator,
-                &self.handler_set,
+                &mut self.handler_set,
             )
             .is_ok()
             {
@@ -207,8 +207,11 @@ impl Solver {
 
             // Propograte constraints.
             self.cell_accumulator.add(cell);
-            match handlers::enforce_constraints(grid, &mut self.cell_accumulator, &self.handler_set)
-            {
+            match handlers::enforce_constraints(
+                grid,
+                &mut self.cell_accumulator,
+                &mut self.handler_set,
+            ) {
                 Ok(()) => {
                     // Recurse to the new cell.
                     self.rec_stack.push(cell_index + 1);
