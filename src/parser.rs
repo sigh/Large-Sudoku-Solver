@@ -4,21 +4,40 @@ use regex::Regex;
 use crate::types::Constraint;
 use crate::types::FixedValues;
 use crate::types::Shape;
+use crate::value_set::ValueSet;
 
-pub fn parse_text(input: &str) -> Option<Constraint> {
+pub type ParserResult = Result<Constraint, String>;
+
+pub fn parse_text(input: &str) -> ParserResult {
     let mut input = String::from(input);
 
     remove_comments(&mut input);
     let sudoku_x = extract_sodoku_x(&mut input);
 
-    let mut parsed = None;
-    parsed = parsed.or_else(|| parse_short_text(&input));
-    parsed = parsed.or_else(|| parse_grid_layout(&input));
+    let parse_fns: Vec<fn(&str) -> ParserResult> = vec![parse_short_text, parse_grid_layout];
 
-    let mut constraint = parsed?;
+    let mut constraint = None;
+    let mut errors = Vec::new();
+    for parse_fn in parse_fns {
+        match (parse_fn)(&input) {
+            Ok(parsed) => {
+                constraint = Some(parsed);
+                break;
+            }
+            Err(msg) => {
+                errors.push(String::from(msg));
+            }
+        }
+    }
+
+    if constraint.is_none() {
+        return Err(errors.join("\n"));
+    }
+
+    let mut constraint = constraint.unwrap();
     constraint.sudoku_x = sudoku_x;
 
-    Some(constraint)
+    Ok(constraint)
 }
 
 fn remove_comments(input: &mut String) {
@@ -46,18 +65,26 @@ fn remove_whitespace(s: &mut String) {
     s.retain(|c| !c.is_whitespace());
 }
 
-fn guess_dimension(num_cells: usize) -> Option<u32> {
-    let dim = (num_cells as f64).sqrt().sqrt() as usize;
-    if !(2..=11).contains(&dim) {
-        return None;
+fn guess_dimension(num_cells: usize) -> Result<u32, String> {
+    let dim = (num_cells as f64).sqrt().sqrt() as u32;
+    let num_values = dim * dim;
+    if num_values * num_values != (num_cells as u32) {
+        return Err(format!(
+            "Cell count does not make a valid grid size: {num_cells}."
+        ));
     }
-    if dim * dim * dim * dim != num_cells {
-        return None;
+
+    if dim < 2 {
+        return Err(format!("Too few cells: {num_cells}."));
     }
-    Some(dim as u32)
+    if num_values > ValueSet::BITS {
+        return Err(format!("Grid side length too large: {num_values}."));
+    }
+
+    Ok(dim)
 }
 
-fn parse_short_text(input: &str) -> Option<Constraint> {
+fn parse_short_text(input: &str) -> ParserResult {
     let mut input = String::from(input);
     remove_whitespace(&mut input);
 
@@ -65,7 +92,7 @@ fn parse_short_text(input: &str) -> Option<Constraint> {
     let num_values = dim * dim;
     let radix = num_values + 1;
     if radix > 36 {
-        return None;
+        return Err(format!("Too many values for short input: {num_values}."));
     }
 
     let mut fixed_values = FixedValues::new();
@@ -76,18 +103,20 @@ fn parse_short_text(input: &str) -> Option<Constraint> {
             c if c.is_digit(radix) => {
                 fixed_values.push((i, c.to_digit(radix).unwrap()));
             }
-            _ => return None,
+            _ => {
+                return Err(format!("Unrecognized character."));
+            }
         }
     }
 
-    Some(Constraint {
+    Ok(Constraint {
         shape: Shape::new(dim),
         fixed_values,
         sudoku_x: false,
     })
 }
 
-fn parse_grid_layout(input: &str) -> Option<Constraint> {
+fn parse_grid_layout(input: &str) -> ParserResult {
     lazy_static! {
         static ref CELL_REGEX: Regex = Regex::new("[.]|\\d+").unwrap();
     }
@@ -105,16 +134,16 @@ fn parse_grid_layout(input: &str) -> Option<Constraint> {
         match *part {
             "." => (),
             _ => {
-                let value = part.parse::<u32>().ok()?;
+                let value = part.parse::<u32>().expect("Unparsable number.");
                 if value <= 0 || value > num_values {
-                    return None;
+                    return Err(format!("Value out of range: {value}."));
                 }
                 fixed_values.push((i, value));
             }
         }
     }
 
-    Some(Constraint {
+    Ok(Constraint {
         shape: Shape::new(dim),
         fixed_values,
         sudoku_x: false,
