@@ -1,6 +1,11 @@
 mod all_different;
 mod handlers;
 
+use std::rc::Rc;
+
+use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
+
 use crate::solver::handlers::HandlerSet;
 use crate::types::CellIndex;
 use crate::types::CellValue;
@@ -10,19 +15,35 @@ use crate::value_set::ValueSet;
 use self::handlers::CellAccumulator;
 
 pub fn solve(constraint: &Constraint) {
-    const LOG_UPDATE_FREQUENCY: u64 = 12;
+    const LOG_UPDATE_FREQUENCY: u64 = 10;
+
+    const SCALE: u64 = 10000;
+    let bar = Rc::new(ProgressBar::new(SCALE));
+    bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {wide_bar:cyan/blue} {percent}%\n{wide_msg}"),
+    );
+
+    let closure_bar = bar.clone();
     let progress_callback = ProgressCallback {
-        callback: |counters| eprintln!("{:?}", counters),
+        callback: Box::new(move |counters| {
+            closure_bar.set_position((counters.progress_ratio * (SCALE as f64)) as u64);
+            closure_bar.set_message(format!("{:?}", counters));
+        }),
         frequency_mask: (1 << LOG_UPDATE_FREQUENCY) - 1,
     };
+
     let solver = Solver::new(constraint, progress_callback);
 
     for (i, result) in solver.enumerate() {
-        println!("{:?}", result.solution);
+        bar.println(format!("{:?}", result.solution));
         if i > 1 {
             panic!("Too many solutions.");
         }
     }
+
+    bar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}"));
+    bar.finish();
 }
 
 pub struct Contradition;
@@ -30,7 +51,7 @@ pub struct Contradition;
 pub type SolverResult = Result<(), Contradition>;
 
 struct ProgressCallback {
-    callback: fn(&Counters),
+    callback: Box<dyn FnMut(&Counters)>,
     frequency_mask: u64,
 }
 
