@@ -22,16 +22,17 @@ pub fn enforce_constraints(
     while let Some(handler_index) = cell_accumulator.pop() {
         cell_accumulator.hold(handler_index);
         let handler = &handler_set.handlers[handler_index];
-        let handler_result = match handler {
+        match handler {
             ConstraintHandler::House(h) => {
                 h.enforce_consistency(grid, cell_accumulator, &mut all_different_enforcer)
             }
             ConstraintHandler::SameValue(h) => h.enforce_consistency(grid, cell_accumulator),
-        };
-        if handler_result.is_err() {
-            cell_accumulator.clear();
-            return handler_result;
         }
+        .map_err(|e| {
+            cell_accumulator.clear();
+            e
+        })?;
+
         cell_accumulator.clear_hold();
     }
 

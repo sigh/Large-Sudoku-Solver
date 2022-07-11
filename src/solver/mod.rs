@@ -18,10 +18,10 @@ pub fn solve(constraint: &Constraint) {
     let solver = Solver::new(constraint, progress_callback);
 
     for (i, result) in solver.enumerate() {
+        println!("{:?}", result.solution);
         if i > 1 {
             panic!("Too many solutions.");
         }
-        println!("{:?}", result.solution);
     }
 }
 
