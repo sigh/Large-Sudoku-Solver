@@ -1,4 +1,4 @@
-use std::{cmp, iter::zip};
+use std::iter::zip;
 
 use crate::types::CellIndex;
 use crate::value_set::ValueSet;
@@ -8,8 +8,8 @@ use super::{Contradition, SolverResult};
 
 pub struct AllDifferentEnforcer {
     assignees: Vec<usize>,
-    ids: Vec<u8>,
-    lowlinks: Vec<u8>,
+    ids: Vec<ValueSet>,
+    lowlinks: Vec<ValueSet>,
     rec_stack: Vec<usize>,
     data_stack: Vec<usize>,
     cell_nodes: Vec<ValueSet>,
@@ -20,8 +20,8 @@ impl AllDifferentEnforcer {
         let num_values = num_values as usize;
         AllDifferentEnforcer {
             assignees: vec![0; num_values],
-            ids: vec![0; num_values],
-            lowlinks: vec![0; num_values],
+            ids: vec![ValueSet::empty(); num_values],
+            lowlinks: vec![ValueSet::empty(); num_values],
             rec_stack: Vec::with_capacity(num_values),
             data_stack: Vec::with_capacity(num_values),
             cell_nodes: vec![ValueSet::empty(); num_values],
@@ -70,10 +70,10 @@ impl AllDifferentEnforcer {
     fn remove_scc(&mut self, assignees_inv: &[ValueSet]) {
         let rec_stack = &mut self.rec_stack;
         let scc_stack = &mut self.data_stack;
-        let ids = &mut self.ids;
-        let lowlinks = &mut self.lowlinks;
         let cell_nodes = &mut self.cell_nodes;
         let assignees = &self.assignees;
+        let ids = &mut self.ids;
+        let lowlinks = &mut self.lowlinks;
 
         rec_stack.clear();
         scc_stack.clear();
@@ -81,9 +81,11 @@ impl AllDifferentEnforcer {
         let mut seen = ValueSet::empty();
         let mut inv_seen = ValueSet::empty();
         let mut inv_stack_member = ValueSet::empty();
-        let mut index = 0;
+        let mut index_set = ValueSet::from_value0(0);
         let mut prev_u = 0;
 
+        // TODO: while let Some(i) = unseen.pop()
+        // TODO: Can we also remove fixed edges in the caller loop.
         for i in 0..cell_nodes.len() {
             let cell_node = cell_nodes[i];
             // Try the next unseen node.
@@ -98,19 +100,22 @@ impl AllDifferentEnforcer {
                 let u_set = ValueSet::from_value0(u as u32);
                 if (seen & u_set).is_empty() {
                     // First time we've seen u.
-                    ids[u] = index;
-                    lowlinks[u] = index;
-                    index += 1;
                     seen |= u_set;
                     let u_inv = assignees_inv[u];
                     inv_stack_member |= u_inv;
                     inv_seen |= u_inv;
                     scc_stack.push(u);
+
+                    // ids and lowlinks are represented as ValueSets, so that
+                    // the min operation can be done by a bitwise or.
+                    ids[u] = index_set;
+                    lowlinks[u] = index_set;
+                    index_set <<= 1;
                 } else {
                     // We returned from a recursive call.
                     // n is the value on the stack above our current position.
                     let n = prev_u;
-                    lowlinks[u] = cmp::min(lowlinks[u], lowlinks[n]);
+                    lowlinks[u] = lowlinks[u] | lowlinks[n];
                 }
 
                 // Recurse into the next unseen node.
@@ -125,12 +130,12 @@ impl AllDifferentEnforcer {
                 let mut stack_adj = cell_nodes[u] & inv_stack_member;
                 while let Some(node) = stack_adj.pop() {
                     let n = assignees[node.value0() as usize];
-                    lowlinks[u] = cmp::min(lowlinks[u], ids[n]);
+                    lowlinks[u] |= ids[n];
                 }
 
                 // We have looked at all the relavent edges.
                 // If u is a root node, pop the scc_stack and generate an SCC.
-                if lowlinks[u] == ids[u] {
+                if lowlinks[u].value0() == ids[u].value0() {
                     // Determine the edges to remove.
                     let mut mask = ValueSet::max();
                     for scc_index in (0..scc_stack.len()).rev() {

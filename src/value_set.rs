@@ -1,4 +1,4 @@
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, ShlAssign};
 use std::{fmt, mem};
 
 use crate::types::CellValue;
@@ -108,6 +108,12 @@ impl Not for ValueSet {
 
     fn not(self) -> Self::Output {
         ValueSet(!self.0)
+    }
+}
+
+impl ShlAssign<usize> for ValueSet {
+    fn shl_assign(&mut self, rhs: usize) {
+        self.0 <<= rhs;
     }
 }
 
