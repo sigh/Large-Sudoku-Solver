@@ -78,44 +78,46 @@ impl AllDifferentEnforcer {
         rec_stack.clear();
         scc_stack.clear();
 
-        let mut seen = ValueSet::empty();
         let mut inv_seen = ValueSet::empty();
         let mut inv_stack_member = ValueSet::empty();
         let mut index_set = ValueSet::from_value0(0);
-        let mut prev_u = 0;
 
-        // TODO: while let Some(i) = unseen.pop()
-        // TODO: Can we also remove fixed edges in the caller loop.
-        for i in 0..cell_nodes.len() {
-            let cell_node = cell_nodes[i];
+        let mut unseen_cells = ValueSet::full(cell_nodes.len() as u32);
+
+        while let Some(i_set) = unseen_cells.pop() {
             // Try the next unseen node.
+            let i = i_set.value0() as usize;
+
             // If it has no edges, ignore it (it's a fixed value).
-            if cell_node.is_empty() || !(seen & ValueSet::from_value0(i as u32)).is_empty() {
+            if cell_nodes[i].is_empty() {
                 continue;
             }
 
             rec_stack.push(i);
+            let mut returned_value = None;
 
             while let Some(&u) = rec_stack.last() {
-                let u_set = ValueSet::from_value0(u as u32);
-                if (seen & u_set).is_empty() {
-                    // First time we've seen u.
-                    seen |= u_set;
-                    let u_inv = assignees_inv[u];
-                    inv_stack_member |= u_inv;
-                    inv_seen |= u_inv;
-                    scc_stack.push(u);
+                match returned_value {
+                    None => {
+                        // First time we've seen u.
+                        let u_set = ValueSet::from_value0(u as u32);
+                        unseen_cells.remove_set(u_set);
+                        let u_inv = assignees_inv[u];
+                        inv_stack_member |= u_inv;
+                        inv_seen |= u_inv;
+                        scc_stack.push(u);
 
-                    // ids and lowlinks are represented as ValueSets, so that
-                    // the min operation can be done by a bitwise or.
-                    ids[u] = index_set;
-                    lowlinks[u] = index_set;
-                    index_set <<= 1;
-                } else {
-                    // We returned from a recursive call.
-                    // n is the value on the stack above our current position.
-                    let n = prev_u;
-                    lowlinks[u] = lowlinks[u] | lowlinks[n];
+                        // ids and lowlinks are represented as ValueSets, so that
+                        // the min operation can be done by a bitwise or.
+                        ids[u] = index_set;
+                        lowlinks[u] = index_set;
+                        index_set <<= 1;
+                    }
+                    Some(n) => {
+                        // We returned from a recursive call.
+                        // n is the value on the stack above our current position.
+                        lowlinks[u] = lowlinks[u] | lowlinks[n];
+                    }
                 }
 
                 // Recurse into the next unseen node.
@@ -123,14 +125,14 @@ impl AllDifferentEnforcer {
                 if !unseen_adj.is_empty() {
                     let n = assignees[unseen_adj.value0() as usize];
                     rec_stack.push(n);
+                    returned_value = None;
                     continue;
                 }
 
                 // Handle any adjacent nodes already in the stack.
-                let mut stack_adj = cell_nodes[u] & inv_stack_member;
-                while let Some(node) = stack_adj.pop() {
-                    let n = assignees[node.value0() as usize];
-                    lowlinks[u] |= ids[n];
+                let stack_adj = cell_nodes[u] & inv_stack_member;
+                for id in stack_adj.map(|v| ids[assignees[v.value0() as usize]]) {
+                    lowlinks[u] |= id;
                 }
 
                 // We have looked at all the relavent edges.
@@ -157,7 +159,7 @@ impl AllDifferentEnforcer {
                     }
                 }
 
-                prev_u = u;
+                returned_value = Some(u);
                 rec_stack.pop();
             }
         }
@@ -182,7 +184,7 @@ impl AllDifferentEnforcer {
         }
 
         // If we assigned all the values we can bail early.
-        if assigned_values.count() as usize == num_cells {
+        if assigned_values.count() == num_cells {
             return Ok(());
         }
 
@@ -195,7 +197,7 @@ impl AllDifferentEnforcer {
             let values = self.cell_nodes[i] & !assigned_values;
             assigned_values |= if !values.is_empty() {
                 // If there is a free assignment, take it.
-                let value = values.min();
+                let value = values.min_set();
                 let v = value.value0();
                 self.assignees[v as usize] = i;
                 value
@@ -239,7 +241,7 @@ impl AllDifferentEnforcer {
             }
 
             // Find the next value. We know this is already assigned.
-            let value = values.min();
+            let value = values.min_set();
             let v = value.value0();
             v_stack.push(v as usize);
 
@@ -254,7 +256,7 @@ impl AllDifferentEnforcer {
                     self.assignees[iv] = ic;
                 }
 
-                return Ok(next_values.min());
+                return Ok(next_values.min_set());
             }
 
             // Otherwise we need to recurse because v is assigned, and that

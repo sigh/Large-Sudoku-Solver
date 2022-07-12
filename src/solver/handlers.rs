@@ -42,7 +42,7 @@ pub fn enforce_constraints(
 pub struct HouseHandler {
     cells: Vec<CellIndex>,
     all_values: ValueSet,
-    num_values: u32,
+    num_values: usize,
     candidate_matching: Vec<ValueSet>,
 }
 
@@ -50,7 +50,7 @@ impl HouseHandler {
     pub fn new(cells: Vec<CellIndex>, shape: &Shape) -> HouseHandler {
         HouseHandler {
             cells,
-            num_values: shape.num_values,
+            num_values: shape.num_values as usize,
             all_values: ValueSet::full(shape.num_values),
             candidate_matching: vec![ValueSet::empty(); shape.num_values as usize],
         }

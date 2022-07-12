@@ -49,17 +49,12 @@ impl ValueSet {
     }
 
     #[inline]
-    pub fn count(&self) -> u32 {
-        self.0.count_ones()
-    }
-
-    #[inline]
     pub fn is_empty(&self) -> bool {
         self.0 == 0
     }
 
     #[inline]
-    pub fn min(&self) -> ValueSet {
+    pub fn min_set(&self) -> ValueSet {
         ValueSet(self.0 & -self.0)
     }
 
@@ -73,7 +68,7 @@ impl ValueSet {
         if self.is_empty() {
             return None;
         }
-        let value = self.min();
+        let value = self.min_set();
         self.remove_set(value);
         Some(value)
     }
@@ -120,5 +115,19 @@ impl ShlAssign<usize> for ValueSet {
 impl fmt::Display for ValueSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl Iterator for ValueSet {
+    type Item = ValueSet;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.pop()
+    }
+
+    #[inline]
+    fn count(self) -> usize {
+        self.0.count_ones() as usize
     }
 }

@@ -270,7 +270,7 @@ impl Solver {
             .enumerate()
             .skip(cell_index)
             .min_by_key(|(_, cell)| {
-                let count = grid[**cell].count();
+                let count = grid[**cell].count() as u32;
                 let bt = self.backtrack_triggers[**cell];
                 let score = if bt > 1 { count / bt } else { count };
                 score
