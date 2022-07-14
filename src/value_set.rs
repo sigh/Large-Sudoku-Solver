@@ -8,7 +8,7 @@ use crate::types::CellValue;
 #[derive(
     Copy, Clone, Debug, PartialEq, BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, ShlAssign,
 )]
-pub struct ValueSet(i128);
+pub struct ValueSet(i64);
 
 impl ValueSet {
     pub const BITS: u32 = (mem::size_of::<Self>() as u32) * u8::BITS;

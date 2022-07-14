@@ -13,3 +13,5 @@ derive_more = "0.99.0"
 
 [profile.release]
 debug = true
+# lto = true
+panic = "abort"
