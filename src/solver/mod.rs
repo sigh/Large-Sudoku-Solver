@@ -130,7 +130,7 @@ impl Solver {
         let progress_frequency_mask = self.progress_callback.frequency_mask;
         let mut new_cell_index = false;
 
-        if self.counters.cells_searched == 0 {
+        if self.counters.values_tried == 0 {
             // Initialize by finding and running all handlers.
             for i in 0..self.num_cells {
                 self.cell_accumulator.add(i);
