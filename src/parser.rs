@@ -25,7 +25,7 @@ pub fn parse_text(input: &str) -> ParserResult {
                 break;
             }
             Err(msg) => {
-                errors.push(String::from(msg));
+                errors.push(msg);
             }
         }
     }
@@ -103,8 +103,8 @@ fn parse_short_text(input: &str) -> ParserResult {
             c if c.is_digit(radix) => {
                 fixed_values.push((i, c.to_digit(radix).unwrap()));
             }
-            _ => {
-                return Err(format!("Unrecognized character."));
+            c => {
+                return Err(format!("Unrecognized character: {}", c));
             }
         }
     }
@@ -135,7 +135,7 @@ fn parse_grid_layout(input: &str) -> ParserResult {
             "." => (),
             _ => {
                 let value = part.parse::<u32>().expect("Unparsable number.");
-                if value <= 0 || value > num_values {
+                if value == 0 || value > num_values {
                     return Err(format!("Value out of range: {value}."));
                 }
                 fixed_values.push((i, value));

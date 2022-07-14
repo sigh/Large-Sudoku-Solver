@@ -175,9 +175,12 @@ impl AllDifferentEnforcer {
         let mut assigned_values = ValueSet::empty();
 
         // Prefill using the candidate mapping.
-        for i in 0..num_cells {
-            let candidate = candidate_matching[i];
-            if !(candidate & self.cell_nodes[i]).is_empty() {
+        for (i, (&candidate, &cell_node)) in candidate_matching
+            .iter()
+            .zip(self.cell_nodes.iter())
+            .enumerate()
+        {
+            if !(candidate & cell_node).is_empty() {
                 assigned_values |= candidate;
                 self.assignees[candidate.value0() as usize] = i;
             }
@@ -188,9 +191,9 @@ impl AllDifferentEnforcer {
             return Ok(());
         }
 
-        for i in 0..num_cells {
+        for (i, &candidate) in candidate_matching.iter().enumerate() {
             // Skip assigned nodes.
-            if !(candidate_matching[i] & self.cell_nodes[i]).is_empty() {
+            if !(candidate & self.cell_nodes[i]).is_empty() {
                 continue;
             }
 

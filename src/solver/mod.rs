@@ -102,7 +102,7 @@ impl Iterator for Solver {
 impl Solver {
     fn new(constraint: &Constraint, progress_callback: ProgressCallback) -> Solver {
         let num_cells = constraint.shape.num_cells;
-        let handler_set = handlers::make_handlers(&constraint);
+        let handler_set = handlers::make_handlers(constraint);
         let cell_accumulator = CellAccumulator::new(num_cells, &handler_set);
 
         let empty_grid = vec![ValueSet::full(constraint.shape.num_values); num_cells];
@@ -243,11 +243,12 @@ impl Solver {
         self.backtrack_triggers[cell] += 1;
     }
 
-    fn skip_fixed_cells(&mut self, grid_index: usize, mut cell_index: usize) -> usize {
+    fn skip_fixed_cells(&mut self, grid_index: usize, start_cell_index: usize) -> usize {
         let cell_order = &mut self.cell_order;
         let grid = &mut self.grid_stack[grid_index];
 
-        for i in cell_index..cell_order.len() {
+        let mut cell_index = start_cell_index;
+        for i in start_cell_index..cell_order.len() {
             let cell = cell_order[i];
 
             let count = grid[cell].count();
@@ -273,6 +274,8 @@ impl Solver {
             .min_by_key(|(_, cell)| {
                 let count = grid[**cell].count() as u32;
                 let bt = self.backtrack_triggers[**cell];
+
+                #[allow(clippy::let_and_return)]
                 let score = if bt > 1 { count / bt } else { count };
                 score
             })
