@@ -14,10 +14,10 @@ use crate::value_set::ValueSet;
 
 use self::handlers::CellAccumulator;
 
-pub fn solve(constraint: &Constraint) {
+pub fn solve(constraint: &Constraint) -> Vec<Vec<CellValue>> {
     const LOG_UPDATE_FREQUENCY: u64 = 10;
-
     const SCALE: u64 = 10000;
+
     let bar = Rc::new(ProgressBar::new(SCALE));
     bar.set_style(
         ProgressStyle::default_bar()
@@ -35,15 +35,20 @@ pub fn solve(constraint: &Constraint) {
 
     let solver = Solver::new(constraint, progress_callback);
 
-    for (i, result) in solver.enumerate() {
-        bar.println(format!("{:?}", result.solution));
-        if i > 1 {
-            panic!("Too many solutions.");
+    let mut solutions = Vec::new();
+    for (i, solution) in solver.enumerate() {
+        bar.println(format!("{:?}", solution));
+        solutions.push(solution);
+        if i > 0 {
+            bar.println("Too many solutions.");
+            break;
         }
     }
 
     bar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}"));
     bar.finish();
+
+    solutions
 }
 
 pub struct Contradition;
@@ -80,21 +85,17 @@ struct Solver {
     progress_callback: ProgressCallback,
 }
 
-struct SolverOutput {
-    solution: Vec<CellValue>,
-}
+pub type Solution = Vec<CellValue>;
 
 impl Iterator for Solver {
-    type Item = SolverOutput;
+    type Item = Solution;
 
     fn next(&mut self) -> Option<Self::Item> {
         let grid = self.run()?;
 
         let solution = grid.iter().map(|vs| vs.value());
 
-        Some(Self::Item {
-            solution: solution.collect(),
-        })
+        Some(solution.collect())
     }
 }
 
