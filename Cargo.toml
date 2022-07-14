@@ -9,6 +9,7 @@ edition = "2021"
 lazy_static = "1.4.0"
 regex = "1"
 indicatif = "0.16.2"
+derive_more = "0.99.0"
 
 [profile.release]
 debug = true

@@ -1,9 +1,13 @@
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, ShlAssign};
+extern crate derive_more;
+
+use derive_more::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, ShlAssign};
 use std::{fmt, mem};
 
 use crate::types::CellValue;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(
+    Copy, Clone, Debug, PartialEq, BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, ShlAssign,
+)]
 pub struct ValueSet(i64);
 
 impl ValueSet {
@@ -71,44 +75,6 @@ impl ValueSet {
         let value = self.min_set();
         self.remove_set(value);
         Some(value)
-    }
-}
-
-impl BitOr for ValueSet {
-    type Output = Self;
-    fn bitor(self, rhs: Self) -> Self::Output {
-        Self(self.0 | rhs.0)
-    }
-}
-impl BitOrAssign for ValueSet {
-    fn bitor_assign(&mut self, rhs: Self) {
-        self.0 |= rhs.0;
-    }
-}
-
-impl BitAnd for ValueSet {
-    type Output = Self;
-    fn bitand(self, rhs: Self) -> Self::Output {
-        Self(self.0 & rhs.0)
-    }
-}
-impl BitAndAssign for ValueSet {
-    fn bitand_assign(&mut self, rhs: Self) {
-        self.0 &= rhs.0;
-    }
-}
-
-impl Not for ValueSet {
-    type Output = Self;
-
-    fn not(self) -> Self::Output {
-        ValueSet(!self.0)
-    }
-}
-
-impl ShlAssign<usize> for ValueSet {
-    fn shl_assign(&mut self, rhs: usize) {
-        self.0 <<= rhs;
     }
 }
 
