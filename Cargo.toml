@@ -15,3 +15,10 @@ derive_more = "0.99.0"
 debug = true
 # lto = true
 panic = "abort"
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "all_different_benchmark"
+harness = false

@@ -1,4 +1,4 @@
-mod all_different;
+pub mod all_different;
 mod handlers;
 
 use std::rc::Rc;

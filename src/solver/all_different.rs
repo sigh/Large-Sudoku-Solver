@@ -36,6 +36,26 @@ impl AllDifferentEnforcer {
         candidate_matching: &mut [ValueSet],
         cell_accumulator: &mut CellAccumulator,
     ) -> SolverResult {
+        self.enforce_all_different_internal(grid, cells, candidate_matching)?;
+
+        // Remove the remaining edges as they are impossible assignments.
+        for (i, cell_node) in self.cell_nodes.iter().enumerate() {
+            if !cell_node.is_empty() {
+                cell_accumulator.add(cells[i]);
+                grid[cells[i]] &= !*cell_node;
+            }
+        }
+
+        Ok(())
+    }
+
+    // Internal section for benchmarking.
+    pub fn enforce_all_different_internal(
+        &mut self,
+        grid: &[ValueSet],
+        cells: &[CellIndex],
+        candidate_matching: &mut [ValueSet],
+    ) -> SolverResult {
         // Copy over the cell values.
         for (i, &cell) in cells.iter().enumerate() {
             self.cell_nodes[i] = grid[cell];
@@ -54,14 +74,6 @@ impl AllDifferentEnforcer {
         // Find and remove strongly-connected components in the
         // implicit directed graph.
         self.remove_scc(candidate_matching);
-
-        // Remove any remaining edges as they are impossible assignments.
-        for (i, cell_node) in self.cell_nodes.iter().enumerate() {
-            if !cell_node.is_empty() {
-                cell_accumulator.add(cells[i]);
-                grid[cells[i]] &= !*cell_node;
-            }
-        }
 
         Ok(())
     }

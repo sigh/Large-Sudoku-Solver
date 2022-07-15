@@ -97,3 +97,15 @@ impl Iterator for ValueSet {
         self.0.count_ones() as usize
     }
 }
+
+impl FromIterator<u32> for ValueSet {
+    fn from_iter<I: IntoIterator<Item = u32>>(iter: I) -> Self {
+        let mut c = ValueSet::empty();
+
+        for i in iter {
+            c |= ValueSet::from_value0(i);
+        }
+
+        c
+    }
+}
