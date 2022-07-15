@@ -1,10 +1,9 @@
-mod parser;
-mod solver;
-mod types;
-mod value_set;
-
 use std::env;
 use std::fs;
+
+use large_sudoku_solver::parser;
+use large_sudoku_solver::solver;
+use large_sudoku_solver::types;
 
 fn grid_to_string(constraint: &types::Constraint, solution: &solver::Solution) -> String {
     let mut output = String::new();
