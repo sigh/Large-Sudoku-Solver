@@ -33,11 +33,6 @@ impl ValueSet {
     }
 
     #[inline]
-    pub fn max() -> ValueSet {
-        ValueSet(-1)
-    }
-
-    #[inline]
     pub fn empty() -> ValueSet {
         ValueSet(0)
     }
