@@ -9,10 +9,27 @@ use super::{Contradition, SolverResult};
 pub struct AllDifferentEnforcer {
     assignees: Vec<usize>,
     ids: Vec<u32>,
-    low_set: Vec<ValueSet>,
+    scc_set: Vec<SccSet>,
     rec_stack: Vec<usize>,
     data_stack: Vec<usize>,
     cell_nodes: Vec<ValueSet>,
+}
+
+#[derive(Copy, Clone, Debug)]
+struct SccSet {
+    low: ValueSet,
+    values: ValueSet,
+}
+
+impl SccSet {
+    fn union_update(&mut self, other: &SccSet) {
+        self.low |= other.low;
+        self.values |= other.values;
+    }
+
+    fn low_id(&self) -> u32 {
+        self.low.value0()
+    }
 }
 
 impl AllDifferentEnforcer {
@@ -21,7 +38,13 @@ impl AllDifferentEnforcer {
         AllDifferentEnforcer {
             assignees: vec![0; num_values],
             ids: vec![0; num_values],
-            low_set: vec![ValueSet::empty(); num_values],
+            scc_set: vec![
+                SccSet {
+                    low: ValueSet::empty(),
+                    values: ValueSet::empty()
+                };
+                num_values
+            ],
             rec_stack: Vec::with_capacity(num_values),
             data_stack: Vec::with_capacity(num_values),
             cell_nodes: vec![ValueSet::empty(); num_values],
@@ -86,16 +109,17 @@ impl AllDifferentEnforcer {
         let cell_nodes = &mut self.cell_nodes;
         let assignees = &self.assignees;
         let ids = &mut self.ids;
-        let low_set = &mut self.low_set;
+        let scc_set = &mut self.scc_set;
 
         rec_stack.clear();
         scc_stack.clear();
 
-        let mut inv_seen = ValueSet::empty();
-        let mut inv_stack_member = ValueSet::empty();
+        let mut stack_cell_values = ValueSet::empty();
         let mut index = 0;
 
-        let mut unseen_cells = ValueSet::full(cell_nodes.len() as u32);
+        let full_set = ValueSet::full(cell_nodes.len() as u32);
+        let mut unseen_cells = full_set;
+        let mut unseen_values = full_set;
 
         while let Some(i_set) = unseen_cells.pop() {
             // Try the next unseen node.
@@ -107,76 +131,95 @@ impl AllDifferentEnforcer {
             }
 
             rec_stack.push(i);
-            let mut is_new_stack_frame = true;
+            enum StackState {
+                NewCall,
+                NoResult,
+                SCCNodeResult(usize),
+            }
+            let mut stack_state = StackState::NewCall;
 
             while let Some(&u) = rec_stack.last() {
-                if is_new_stack_frame {
-                    is_new_stack_frame = false;
+                match stack_state {
+                    StackState::NewCall => {
+                        // First time we've seen u.
+                        let u_set = ValueSet::from_value0(u as u32);
+                        unseen_cells.remove_set(u_set);
+                        let u_inv = assignees_inv[u];
+                        stack_cell_values |= u_inv;
+                        unseen_values.remove_set(u_inv);
+                        scc_stack.push(u);
 
-                    // First time we've seen u.
-                    let u_set = ValueSet::from_value0(u as u32);
-                    unseen_cells.remove_set(u_set);
-                    let u_inv = assignees_inv[u];
-                    inv_stack_member |= u_inv;
-                    inv_seen |= u_inv;
-                    scc_stack.push(u);
-
-                    // low_set is represented as a ValueSet, so that
-                    // the min operation can be done by a bitwise or.
-                    ids[u] = index;
-                    low_set[u] = ValueSet::from_value0(index);
-                    index += 1;
+                        ids[u] = index;
+                        // scc_set tells us what we know about the set that `u`
+                        // is in.
+                        scc_set[u] = SccSet {
+                            // low is represented as a ValueSet, so that
+                            // bitwise OR preserves the min of the sets.
+                            low: ValueSet::from_value0(index),
+                            values: u_inv,
+                        };
+                        index += 1;
+                    }
+                    StackState::NoResult => {}
+                    StackState::SCCNodeResult(n) => {
+                        // This is not necessary for correctness (as n in an
+                        // adjacency which will be handled below).
+                        // However it is vital for performance to skip over
+                        // the seen values. ~2x performance increase.
+                        let scc_set_n = scc_set[n];
+                        scc_set[u].union_update(&scc_set_n);
+                    }
                 }
 
                 // Recurse into the next unseen node.
-                let unseen_adj = cell_nodes[u] & !inv_seen;
+                let unseen_adj = cell_nodes[u] & unseen_values;
                 if !unseen_adj.is_empty() {
                     let n = assignees[unseen_adj.value0() as usize];
                     rec_stack.push(n);
-                    is_new_stack_frame = true;
+                    stack_state = StackState::NewCall;
                     continue;
                 }
 
                 // Handle any adjacent nodes already in the stack.
-                let stack_adj = cell_nodes[u] & inv_stack_member;
-                for n in stack_adj.map(|v| assignees[v.value0() as usize]) {
-                    // This handles both the update cases:
-                    //   * `lowlinks[u] = min(lowlinks[u], lowlinks[n])`
-                    //      after the DFS returns. In this case the node we
-                    //      returned from will be a stack member.
-                    //   * `lowlinks[u] = min(lowlinks[u], id[n])` for each
-                    //      adjacent vertex. lowlinks[n] is always lower than
-                    //      id[n] but still a value in this SCC.
+                // Ignore any that we already know are in the same scc set as u,
+                // as they add no new information.
+                let mut scc_set_u = scc_set[u];
+                let mut stack_adj = cell_nodes[u] & stack_cell_values & !scc_set_u.values;
+                scc_set_u.values |= stack_adj;
+                while let Some(v) = stack_adj.pop() {
+                    let n = assignees[v.value0() as usize];
                     // We preserve the invariant that
                     // `low_set[u].value0() = lowlinks[u]`. This is because
                     // bitwise OR preserves the min of two sets.
-                    low_set[u] = low_set[u] | low_set[n];
+                    scc_set_u.union_update(&scc_set[n]);
+                    // NOTE: We could remove `scc_set[n].values` from
+                    // `stack_adj` here, but it is only helpful a minority of
+                    // the time.
+                    // This is because `stack_adj` already contained
+                    // `v = assignees_inv[n]` so we need extra edges not unique
+                    // to `n`. We've also found a bunch from our recursion.
                 }
 
                 // We have looked at all the relavent edges.
                 // If u is a root node, pop the scc_stack and generate an SCC.
-                if low_set[u].value0() == ids[u] {
+                if scc_set_u.low_id() == ids[u] {
+                    // Remove the edges and truncate the stack.
+                    let mask = !scc_set_u.values;
+                    stack_cell_values &= mask;
+
                     // We know exactly how many cells are in this scc.
-                    let set_size = low_set[u].count();
+                    let set_size = scc_set_u.values.count();
                     let remaining_size = scc_stack.len() - set_size;
 
-                    // Determine the edges to remove by looking at the top
-                    // of the scc_stack.
-                    let mask = !scc_stack
-                        .iter()
-                        .skip(remaining_size)
-                        .map(|&w| assignees_inv[w])
-                        .reduce(|a, b| a | b)
-                        .unwrap_or_else(|| unreachable!());
-
-                    inv_stack_member &= mask;
-
-                    // Remove the edges and truncate the stack.
                     for w in scc_stack.drain(remaining_size..) {
                         cell_nodes[w] &= mask;
                     }
+                    stack_state = StackState::NoResult;
+                } else {
+                    stack_state = StackState::SCCNodeResult(u);
                 }
 
+                scc_set[u] = scc_set_u;
                 rec_stack.pop();
             }
         }

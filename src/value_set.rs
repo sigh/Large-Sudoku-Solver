@@ -53,6 +53,11 @@ impl ValueSet {
     }
 
     #[inline]
+    pub fn count(self) -> usize {
+        self.0.count_ones() as usize
+    }
+
+    #[inline]
     pub fn min_set(&self) -> ValueSet {
         ValueSet(self.0 & -self.0)
     }
@@ -76,20 +81,6 @@ impl ValueSet {
 impl fmt::Display for ValueSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
-    }
-}
-
-impl Iterator for ValueSet {
-    type Item = ValueSet;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.pop()
-    }
-
-    #[inline]
-    fn count(self) -> usize {
-        self.0.count_ones() as usize
     }
 }
 
