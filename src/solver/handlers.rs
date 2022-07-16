@@ -1,22 +1,17 @@
-use crate::types::CellIndex;
-use crate::types::Constraint;
-use crate::types::Shape;
-use crate::value_set::ValueSet;
-
 use std::cell::RefCell;
 
-type HandlerIndex = usize;
+use crate::types::{CellIndex, Constraint, Shape};
+use crate::value_set::ValueSet;
 
-use crate::solver::all_different::AllDifferentEnforcer;
-
-use super::Contradition;
-use super::SolverResult;
+use super::all_different::AllDifferentEnforcer;
+use super::solver;
+use super::solver::Contradition;
 
 pub fn enforce_constraints<VS: ValueSet + Copy>(
     grid: &mut [VS],
     cell_accumulator: &mut CellAccumulator,
     handler_set: &mut HandlerSet<VS>,
-) -> SolverResult {
+) -> solver::Result {
     let mut all_different_enforcer = handler_set.all_diff_enforcer.borrow_mut();
 
     while let Some(handler_index) = cell_accumulator.pop() {
@@ -61,7 +56,7 @@ impl<VS: ValueSet + Copy> HouseHandler<VS> {
         grid: &mut [VS],
         cell_accumulator: &mut CellAccumulator,
         all_diff_enforcer: &mut AllDifferentEnforcer<VS>,
-    ) -> SolverResult {
+    ) -> solver::Result {
         let mut all_values = VS::empty();
         let mut total_count = 0;
 
@@ -113,7 +108,7 @@ impl SameValueHandler {
         &self,
         grid: &mut [VS],
         cell_accumulator: &mut CellAccumulator,
-    ) -> SolverResult {
+    ) -> solver::Result {
         // Find the values in each cell set.
         let values0 = self
             .cells0
@@ -156,7 +151,7 @@ impl SameValueHandler {
         allowed_values: &VS,
         cells: &[CellIndex],
         cell_accumulator: &mut CellAccumulator,
-    ) -> SolverResult {
+    ) -> solver::Result {
         for &c0 in cells {
             let v = grid[c0].intersection(allowed_values);
             if v.is_empty() {
@@ -353,6 +348,8 @@ impl IndexLinkedList {
         }
     }
 }
+
+type HandlerIndex = usize;
 
 pub struct CellAccumulator {
     cell_to_handlers: Vec<Vec<HandlerIndex>>,
