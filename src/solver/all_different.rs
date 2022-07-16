@@ -3,7 +3,7 @@ use std::iter::zip;
 use crate::types::CellIndex;
 use crate::value_set::ValueSet;
 
-use super::handlers::CellAccumulator;
+use super::cell_accumulator::CellAccumulator;
 use super::runner;
 use super::runner::Contradition;
 

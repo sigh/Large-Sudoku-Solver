@@ -1,4 +1,5 @@
 pub mod all_different;
+mod cell_accumulator;
 mod handlers;
 mod runner;
 

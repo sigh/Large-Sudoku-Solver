@@ -3,8 +3,8 @@ use crate::types::CellValue;
 use crate::types::Constraint;
 use crate::value_set::ValueSet;
 
+use super::cell_accumulator::CellAccumulator;
 use super::handlers;
-use super::handlers::{CellAccumulator, HandlerSet};
 use super::{Counters, ProgressCallback, Solution};
 
 pub struct Contradition;
@@ -22,7 +22,7 @@ pub struct Runner<VS: ValueSet> {
     cell_order: Vec<CellIndex>,
     rec_stack: Vec<usize>,
     grid_stack: Vec<Grid<VS>>,
-    handler_set: HandlerSet<VS>,
+    handler_set: handlers::HandlerSet<VS>,
     cell_accumulator: CellAccumulator,
     backtrack_triggers: Vec<u32>,
     progress_ratio_stack: Vec<f64>,
