@@ -260,10 +260,9 @@ impl AllDifferentEnforcer {
             let values = self.cell_nodes[i] & !assigned_values;
             assigned_values |= if !values.is_empty() {
                 // If there is a free assignment, take it.
-                let value = values.min_set();
-                let v = value.value();
+                let v = values.value();
                 self.assignees[v as usize] = i;
-                value
+                ValueSet::from_value(v)
             } else {
                 // Otherwise, find a free value and update the matching.
                 self.update_matching(i, assigned_values)?
@@ -304,8 +303,7 @@ impl AllDifferentEnforcer {
             }
 
             // Find the next value. We know this is already assigned.
-            let value = values.min_set();
-            let v = value.value();
+            let v = values.value();
             v_stack.push(v as usize);
 
             // Check if the next assignee is free.
@@ -319,12 +317,12 @@ impl AllDifferentEnforcer {
                     self.assignees[iv] = ic;
                 }
 
-                return Ok(next_values.min_set());
+                return Ok(ValueSet::from_value(next_v));
             }
 
             // Otherwise we need to recurse because v is assigned, and that
             // cell needs to find a new assignment.
-            seen |= value;
+            seen |= ValueSet::from_value(v);
             c_stack.push(next_c);
         }
 

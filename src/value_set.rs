@@ -46,11 +46,6 @@ impl ValueSet {
     }
 
     #[inline]
-    pub fn min_set(&self) -> ValueSet {
-        ValueSet(self.0 & -self.0)
-    }
-
-    #[inline]
     pub fn remove_set(&mut self, other: ValueSet) {
         self.0 &= !other.0
     }
@@ -60,9 +55,9 @@ impl ValueSet {
         if self.is_empty() {
             return None;
         }
-        let value = self.min_set();
-        self.remove_set(value);
-        Some(value)
+        let min_set = ValueSet(self.0 & -self.0);
+        self.remove_set(min_set);
+        Some(min_set)
     }
 }
 
