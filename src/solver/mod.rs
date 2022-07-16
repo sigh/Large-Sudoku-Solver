@@ -10,6 +10,7 @@ use crate::solver::handlers::HandlerSet;
 use crate::types::CellIndex;
 use crate::types::CellValue;
 use crate::types::Constraint;
+use crate::value_set::IntBitSet;
 use crate::value_set::ValueSet;
 
 use self::handlers::CellAccumulator;
@@ -33,7 +34,7 @@ pub fn solve(constraint: &Constraint) -> Vec<Vec<CellValue>> {
         frequency_mask: (1 << LOG_UPDATE_FREQUENCY) - 1,
     };
 
-    let solver = Solver::new(constraint, progress_callback);
+    let solver = Solver::<IntBitSet<i64>>::new(constraint, progress_callback);
 
     let mut solutions = Vec::new();
     for (i, solution) in solver.enumerate() {
@@ -67,7 +68,7 @@ struct ProgressCallback {
     frequency_mask: u64,
 }
 
-type Grid = Vec<ValueSet>;
+type Grid<V> = Vec<V>;
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Counters {
@@ -79,12 +80,12 @@ pub struct Counters {
     progress_ratio: f64,
 }
 
-struct Solver {
+struct Solver<VS: ValueSet> {
     num_cells: usize,
     cell_order: Vec<CellIndex>,
     rec_stack: Vec<usize>,
-    grid_stack: Vec<Grid>,
-    handler_set: HandlerSet,
+    grid_stack: Vec<Grid<VS>>,
+    handler_set: HandlerSet<VS>,
     cell_accumulator: CellAccumulator,
     backtrack_triggers: Vec<u32>,
     progress_ratio_stack: Vec<f64>,
@@ -94,7 +95,7 @@ struct Solver {
 
 pub type Solution = Vec<CellValue>;
 
-impl Iterator for Solver {
+impl<VS: ValueSet + Copy> Iterator for Solver<VS> {
     type Item = Solution;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -108,20 +109,20 @@ impl Iterator for Solver {
     }
 }
 
-impl Solver {
-    fn new(constraint: &Constraint, progress_callback: ProgressCallback) -> Solver {
+impl<VS: ValueSet + Copy> Solver<VS> {
+    fn new(constraint: &Constraint, progress_callback: ProgressCallback) -> Self {
         let num_cells = constraint.shape.num_cells;
         let handler_set = handlers::make_handlers(constraint);
-        let cell_accumulator = CellAccumulator::new(num_cells, &handler_set);
+        let cell_accumulator = CellAccumulator::new(num_cells, &handler_set.handlers);
 
-        let empty_grid = vec![ValueSet::full(constraint.shape.num_values as u8); num_cells];
+        let empty_grid = vec![VS::full(constraint.shape.num_values as u8); num_cells];
         let mut grids = vec![empty_grid; num_cells + 1];
 
         for (cell, value) in &constraint.fixed_values {
-            grids[0][*cell] = ValueSet::from_value(value.index());
+            grids[0][*cell] = VS::from_value(value.index());
         }
 
-        Solver {
+        Self {
             num_cells,
             cell_order: (0..num_cells).collect(),
             rec_stack: Vec::with_capacity(num_cells),
@@ -135,7 +136,7 @@ impl Solver {
         }
     }
 
-    fn run(&mut self) -> Option<&Grid> {
+    fn run(&mut self) -> Option<&Grid<VS>> {
         let progress_frequency_mask = self.progress_callback.frequency_mask;
         let mut new_cell_index = false;
 
@@ -195,7 +196,7 @@ impl Solver {
             // Find the next value to try.
             let value = match grid[cell].pop() {
                 None => continue,
-                Some(v) => ValueSet::from_value(v),
+                Some(v) => VS::from_value(v),
             };
 
             // We know we want to come back to this index.

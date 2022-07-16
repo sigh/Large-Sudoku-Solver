@@ -6,25 +6,25 @@ use crate::value_set::ValueSet;
 use super::handlers::CellAccumulator;
 use super::{Contradition, SolverResult};
 
-pub struct AllDifferentEnforcer {
+pub struct AllDifferentEnforcer<VS: ValueSet> {
     assignees: Vec<usize>,
     ids: Vec<u8>,
-    scc_set: Vec<SccSet>,
+    scc_set: Vec<SccSet<VS>>,
     rec_stack: Vec<usize>,
     data_stack: Vec<usize>,
-    cell_nodes: Vec<ValueSet>,
+    cell_nodes: Vec<VS>,
 }
 
 #[derive(Copy, Clone, Debug)]
-struct SccSet {
-    low: ValueSet,
-    values: ValueSet,
+struct SccSet<VS: ValueSet> {
+    low: VS,
+    values: VS,
 }
 
-impl SccSet {
-    fn union_update(&mut self, other: &SccSet) {
-        self.low |= other.low;
-        self.values |= other.values;
+impl<VS: ValueSet> SccSet<VS> {
+    fn union_update(&mut self, other: &SccSet<VS>) {
+        self.low.add_set(&other.low);
+        self.values.add_set(&other.values);
     }
 
     fn low_id(&self) -> Option<u8> {
@@ -32,31 +32,31 @@ impl SccSet {
     }
 }
 
-impl AllDifferentEnforcer {
-    pub fn new(num_values: u32) -> AllDifferentEnforcer {
+impl<VS: ValueSet + Copy> AllDifferentEnforcer<VS> {
+    pub fn new(num_values: u32) -> Self {
         let num_values = num_values as usize;
-        AllDifferentEnforcer {
+        Self {
             assignees: vec![0; num_values],
             ids: vec![0; num_values],
             scc_set: vec![
                 SccSet {
-                    low: ValueSet::empty(),
-                    values: ValueSet::empty()
+                    low: VS::empty(),
+                    values: VS::empty()
                 };
                 num_values
             ],
             rec_stack: Vec::with_capacity(num_values),
             data_stack: Vec::with_capacity(num_values),
-            cell_nodes: vec![ValueSet::empty(); num_values],
+            cell_nodes: vec![VS::empty(); num_values],
         }
     }
 
     // Algorithm: http://www.constraint-programming.com/people/regin/papers/alldiff.pdf
     pub fn enforce_all_different(
         &mut self,
-        grid: &mut [ValueSet],
+        grid: &mut [VS],
         cells: &[CellIndex],
-        candidate_matching: &mut [ValueSet],
+        candidate_matching: &mut [VS],
         cell_accumulator: &mut CellAccumulator,
     ) -> SolverResult {
         self.enforce_all_different_internal(grid, cells, candidate_matching)?;
@@ -65,7 +65,7 @@ impl AllDifferentEnforcer {
         for (i, cell_node) in self.cell_nodes.iter().enumerate() {
             if !cell_node.is_empty() {
                 cell_accumulator.add(cells[i]);
-                grid[cells[i]] &= !*cell_node;
+                grid[cells[i]].remove_set(cell_node);
             }
         }
 
@@ -75,9 +75,9 @@ impl AllDifferentEnforcer {
     // Internal section for benchmarking.
     pub fn enforce_all_different_internal(
         &mut self,
-        grid: &[ValueSet],
+        grid: &[VS],
         cells: &[CellIndex],
-        candidate_matching: &mut [ValueSet],
+        candidate_matching: &mut [VS],
     ) -> SolverResult {
         // Copy over the cell values.
         for (i, &cell) in cells.iter().enumerate() {
@@ -90,8 +90,8 @@ impl AllDifferentEnforcer {
         self.max_matching(candidate_matching)?;
 
         // Remove the forward edges in the maximum matching.
-        for (cell_node, &candidate) in zip(self.cell_nodes.iter_mut(), candidate_matching.iter()) {
-            *cell_node &= !candidate;
+        for (cell_node, candidate) in zip(self.cell_nodes.iter_mut(), candidate_matching.iter()) {
+            cell_node.remove_set(candidate);
         }
 
         // Find and remove strongly-connected components in the
@@ -103,7 +103,7 @@ impl AllDifferentEnforcer {
 
     // https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
     // With simplifications as per https://www.cs.cmu.edu/~15451-f18/lectures/lec19-DFS-strong-components.pdf
-    fn remove_scc(&mut self, assignees_inv: &[ValueSet]) {
+    fn remove_scc(&mut self, assignees_inv: &[VS]) {
         let rec_stack = &mut self.rec_stack;
         let scc_stack = &mut self.data_stack;
         let cell_nodes = &mut self.cell_nodes;
@@ -114,10 +114,10 @@ impl AllDifferentEnforcer {
         rec_stack.clear();
         scc_stack.clear();
 
-        let mut stack_cell_values = ValueSet::empty();
+        let mut stack_cell_values = VS::empty();
         let mut index = 0;
 
-        let full_set = ValueSet::full(cell_nodes.len() as u8);
+        let full_set = VS::full(cell_nodes.len() as u8);
         let mut unseen_cells = full_set;
         let mut unseen_values = full_set;
 
@@ -141,20 +141,20 @@ impl AllDifferentEnforcer {
                 match stack_state {
                     StackState::NewCall => {
                         // First time we've seen u.
-                        let u_set = ValueSet::from_value(u as u8);
-                        unseen_cells.remove_set(u_set);
+                        let u_set = VS::from_value(u as u8);
+                        unseen_cells.remove_set(&u_set);
                         let u_inv = assignees_inv[u];
-                        stack_cell_values |= u_inv;
-                        unseen_values.remove_set(u_inv);
+                        stack_cell_values.add_set(&u_inv);
+                        unseen_values.remove_set(&u_inv);
                         scc_stack.push(u);
 
                         ids[u] = index;
                         // scc_set tells us what we know about the set that `u`
                         // is in.
                         scc_set[u] = SccSet {
-                            // low is represented as a ValueSet, so that
+                            // low is represented as a VS, so that
                             // bitwise OR preserves the min of the sets.
-                            low: ValueSet::from_value(index as u8),
+                            low: VS::from_value(index as u8),
                             values: u_inv,
                         };
                         index += 1;
@@ -171,7 +171,7 @@ impl AllDifferentEnforcer {
                 }
 
                 // Recurse into the next unseen node.
-                let unseen_adj = cell_nodes[u] & unseen_values;
+                let unseen_adj = cell_nodes[u].intersection(&unseen_values);
                 if let Some(value) = unseen_adj.min() {
                     let n = assignees[value as usize];
                     rec_stack.push(n);
@@ -183,8 +183,10 @@ impl AllDifferentEnforcer {
                 // Ignore any that we already know are in the same scc set as u,
                 // as they add no new information.
                 let mut scc_set_u = scc_set[u];
-                let mut stack_adj = cell_nodes[u] & stack_cell_values & !scc_set_u.values;
-                scc_set_u.values |= stack_adj;
+                let mut stack_adj = cell_nodes[u]
+                    .intersection(&stack_cell_values)
+                    .without(&scc_set_u.values);
+                scc_set_u.values.add_set(&stack_adj);
                 while let Some(value) = stack_adj.pop() {
                     let n = assignees[value as usize];
                     // We preserve the invariant that
@@ -203,15 +205,15 @@ impl AllDifferentEnforcer {
                 // If u is a root node, pop the scc_stack and generate an SCC.
                 if scc_set_u.low_id() == Some(ids[u]) {
                     // Remove the edges and truncate the stack.
-                    let mask = !scc_set_u.values;
-                    stack_cell_values &= mask;
+                    let mask = scc_set_u.values;
+                    stack_cell_values.remove_set(&mask);
 
                     // We know exactly how many cells are in this scc.
                     let set_size = scc_set_u.values.count();
                     let remaining_size = scc_stack.len() - set_size;
 
                     for w in scc_stack.drain(remaining_size..) {
-                        cell_nodes[w] &= mask;
+                        cell_nodes[w].remove_set(&mask);
                     }
                     stack_state = StackState::NoResult;
                 } else {
@@ -228,10 +230,10 @@ impl AllDifferentEnforcer {
     // Implementation of the Ford–Fulkerson algorithm method.
     // https://en.wikipedia.org/wiki/Ford%E2%80%93Fulkerson_algorithm
     // See also https://www.geeksforgeeks.org/maximum-bipartite-matching/
-    fn max_matching(&mut self, candidate_matching: &mut [ValueSet]) -> SolverResult {
+    fn max_matching(&mut self, candidate_matching: &mut [VS]) -> SolverResult {
         let num_cells = self.cell_nodes.len();
 
-        let mut assigned_values = ValueSet::empty();
+        let mut assigned_values = VS::empty();
 
         // Prefill using the candidate mapping.
         for (i, (&candidate, &cell_node)) in candidate_matching
@@ -239,8 +241,8 @@ impl AllDifferentEnforcer {
             .zip(self.cell_nodes.iter())
             .enumerate()
         {
-            if let Some(candidate_value) = (candidate & cell_node).min() {
-                assigned_values |= candidate;
+            if let Some(candidate_value) = candidate.intersection(&cell_node).min() {
+                assigned_values.add_set(&candidate);
                 self.assignees[candidate_value as usize] = i;
             }
         }
@@ -250,40 +252,36 @@ impl AllDifferentEnforcer {
             return Ok(());
         }
 
-        for (i, &candidate) in candidate_matching.iter().enumerate() {
+        for (i, candidate) in candidate_matching.iter().enumerate() {
             // Skip assigned nodes.
-            if !(candidate & self.cell_nodes[i]).is_empty() {
+            if !(candidate.intersection(&self.cell_nodes[i])).is_empty() {
                 continue;
             }
 
-            let values = self.cell_nodes[i] & !assigned_values;
-            assigned_values |= match values.min() {
+            let values = self.cell_nodes[i].without(&assigned_values);
+            assigned_values.add_set(&match values.min() {
                 Some(v) => {
                     // If there is a free assignment, take it.
                     self.assignees[v as usize] = i;
-                    ValueSet::from_value(v)
+                    VS::from_value(v)
                 }
 
                 None => {
                     // Otherwise, find a free value and update the matching.
-                    self.update_matching(i, assigned_values)?
+                    self.update_matching(i, &assigned_values)?
                 }
-            };
+            });
         }
 
         for (i, &assignee) in self.assignees.iter().enumerate() {
-            let i_set = ValueSet::from_value(i as u8);
+            let i_set = VS::from_value(i as u8);
             candidate_matching[assignee] = i_set;
         }
 
         Ok(())
     }
 
-    fn update_matching(
-        &mut self,
-        cell: CellIndex,
-        assigned: ValueSet,
-    ) -> Result<ValueSet, Contradition> {
+    fn update_matching(&mut self, cell: CellIndex, assigned: &VS) -> Result<VS, Contradition> {
         let c_stack = &mut self.rec_stack;
         let v_stack = &mut self.data_stack;
         c_stack.clear();
@@ -291,11 +289,11 @@ impl AllDifferentEnforcer {
 
         c_stack.push(cell);
 
-        let mut seen = ValueSet::empty();
+        let mut seen = VS::empty();
 
         while let Some(&c) = c_stack.last() {
             // Check any unseen values.
-            let values = self.cell_nodes[c] & !seen;
+            let values = self.cell_nodes[c].without(&seen);
 
             // Find the next value, or backtrack if we are out of legal values.
             let v = match values.min() {
@@ -313,19 +311,19 @@ impl AllDifferentEnforcer {
             // Check if the next assignee is free.
             // If so then we can assign everything in the stack and return.
             let next_c = self.assignees[v as usize];
-            let next_values = self.cell_nodes[next_c] & !assigned;
+            let next_values = self.cell_nodes[next_c].without(assigned);
             if let Some(next_v) = next_values.min() {
                 self.assignees[next_v as usize] = next_c;
                 for (&iv, &ic) in zip(v_stack.iter(), c_stack.iter()) {
                     self.assignees[iv] = ic;
                 }
 
-                return Ok(ValueSet::from_value(next_v));
+                return Ok(VS::from_value(next_v));
             }
 
             // Otherwise we need to recurse because v is assigned, and that
             // cell needs to find a new assignment.
-            seen |= ValueSet::from_value(v);
+            seen.add_set(&VS::from_value(v));
             c_stack.push(next_c);
         }
 

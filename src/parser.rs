@@ -5,7 +5,7 @@ use crate::types::CellValue;
 use crate::types::Constraint;
 use crate::types::FixedValues;
 use crate::types::Shape;
-use crate::value_set::ValueSet;
+use crate::value_set::IntBitSet;
 
 pub type ParserResult = Result<Constraint, String>;
 
@@ -78,7 +78,7 @@ fn guess_dimension(num_cells: usize) -> Result<u32, String> {
     if dim < 2 {
         return Err(format!("Too few cells: {num_cells}."));
     }
-    if num_values > ValueSet::BITS.into() {
+    if num_values > IntBitSet::<i64>::BITS.into() {
         return Err(format!("Grid side length too large: {num_values}."));
     }
 

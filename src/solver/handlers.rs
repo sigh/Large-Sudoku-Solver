@@ -12,10 +12,10 @@ use crate::solver::all_different::AllDifferentEnforcer;
 use super::Contradition;
 use super::SolverResult;
 
-pub fn enforce_constraints(
-    grid: &mut [ValueSet],
+pub fn enforce_constraints<VS: ValueSet + Copy>(
+    grid: &mut [VS],
     cell_accumulator: &mut CellAccumulator,
-    handler_set: &mut HandlerSet,
+    handler_set: &mut HandlerSet<VS>,
 ) -> SolverResult {
     let mut all_different_enforcer = handler_set.all_diff_enforcer.borrow_mut();
 
@@ -39,39 +39,39 @@ pub fn enforce_constraints(
     Ok(())
 }
 
-pub struct HouseHandler {
+pub struct HouseHandler<VS> {
     cells: Vec<CellIndex>,
-    all_values: ValueSet,
+    all_values: VS,
     num_values: usize,
-    candidate_matching: Vec<ValueSet>,
+    candidate_matching: Vec<VS>,
 }
 
-impl HouseHandler {
-    pub fn new(cells: Vec<CellIndex>, shape: &Shape) -> HouseHandler {
-        HouseHandler {
+impl<VS: ValueSet + Copy> HouseHandler<VS> {
+    pub fn new(cells: Vec<CellIndex>, shape: &Shape) -> Self {
+        Self {
             cells,
             num_values: shape.num_values as usize,
-            all_values: ValueSet::full(shape.num_values as u8),
-            candidate_matching: vec![ValueSet::empty(); shape.num_values as usize],
+            all_values: VS::full(shape.num_values as u8),
+            candidate_matching: vec![VS::empty(); shape.num_values as usize],
         }
     }
 
     fn enforce_consistency(
         &mut self,
-        grid: &mut [ValueSet],
+        grid: &mut [VS],
         cell_accumulator: &mut CellAccumulator,
-        all_diff_enforcer: &mut AllDifferentEnforcer,
+        all_diff_enforcer: &mut AllDifferentEnforcer<VS>,
     ) -> SolverResult {
-        let mut all_values = ValueSet::empty();
+        let mut all_values = VS::empty();
         let mut total_count = 0;
 
         for &cell in &self.cells {
             let v = grid[cell];
-            all_values |= v;
+            all_values.add_set(&v);
             total_count += v.count();
         }
 
-        if all_values != self.all_values {
+        if !all_values.equals(&self.all_values) {
             return Err(Contradition);
         }
         if total_count == self.num_values {
@@ -98,20 +98,20 @@ pub struct SameValueHandler {
 }
 
 impl SameValueHandler {
-    pub fn new(cells0: Vec<CellIndex>, cells1: Vec<CellIndex>) -> SameValueHandler {
+    pub fn new(cells0: Vec<CellIndex>, cells1: Vec<CellIndex>) -> Self {
         let mut cells = Vec::new();
         cells.extend(cells0.iter());
         cells.extend(cells1.iter());
-        SameValueHandler {
+        Self {
             cells,
             cells0,
             cells1,
         }
     }
 
-    fn enforce_consistency(
+    fn enforce_consistency<VS: ValueSet + Copy>(
         &self,
-        grid: &mut [ValueSet],
+        grid: &mut [VS],
         cell_accumulator: &mut CellAccumulator,
     ) -> SolverResult {
         // Find the values in each cell set.
@@ -119,21 +119,21 @@ impl SameValueHandler {
             .cells0
             .iter()
             .map(|&c| grid[c])
-            .reduce(|a, b| a | b)
+            .reduce(|a, b| a.union(&b))
             .unwrap();
         let values1 = self
             .cells1
             .iter()
             .map(|&c| grid[c])
-            .reduce(|a, b| a | b)
+            .reduce(|a, b| a.union(&b))
             .unwrap();
 
-        if values0 == values1 {
+        if values0.equals(&values1) {
             return Ok(());
         }
 
         // Determine all available values.
-        let values = values0 & values1;
+        let values = values0.intersection(&values1);
 
         // Check if we have enough values.
         if (values.count() as usize) < self.cells0.len() {
@@ -141,28 +141,28 @@ impl SameValueHandler {
         }
 
         // Enforce the constrained value set.
-        if values0 != values {
-            Self::remove_extra_values(grid, values, &self.cells0, cell_accumulator)?
+        if !values0.equals(&values) {
+            Self::remove_extra_values(grid, &values, &self.cells0, cell_accumulator)?
         }
-        if values1 != values {
-            Self::remove_extra_values(grid, values, &self.cells1, cell_accumulator)?
+        if !values1.equals(&values) {
+            Self::remove_extra_values(grid, &values, &self.cells1, cell_accumulator)?
         }
 
         Ok(())
     }
 
-    fn remove_extra_values(
-        grid: &mut [ValueSet],
-        allowed_values: ValueSet,
+    fn remove_extra_values<VS: ValueSet>(
+        grid: &mut [VS],
+        allowed_values: &VS,
         cells: &[CellIndex],
         cell_accumulator: &mut CellAccumulator,
     ) -> SolverResult {
         for &c0 in cells {
-            let v = grid[c0] & allowed_values;
+            let v = grid[c0].intersection(allowed_values);
             if v.is_empty() {
                 return Err(Contradition);
             }
-            if v != grid[c0] {
+            if !v.equals(&grid[c0]) {
                 grid[c0] = v;
                 cell_accumulator.add(c0);
             }
@@ -175,12 +175,16 @@ impl SameValueHandler {
     }
 }
 
-enum ConstraintHandler {
-    House(HouseHandler),
+pub trait CellContainer {
+    fn cells(&self) -> &[CellIndex];
+}
+
+pub enum ConstraintHandler<VS> {
+    House(HouseHandler<VS>),
     SameValue(SameValueHandler),
 }
 
-impl ConstraintHandler {
+impl<VS: ValueSet + Copy> CellContainer for ConstraintHandler<VS> {
     fn cells(&self) -> &[CellIndex] {
         match self {
             ConstraintHandler::House(h) => h.cells(),
@@ -189,14 +193,14 @@ impl ConstraintHandler {
     }
 }
 
-pub struct HandlerSet {
-    handlers: Vec<ConstraintHandler>,
-    all_diff_enforcer: RefCell<AllDifferentEnforcer>,
+pub struct HandlerSet<VS: ValueSet> {
+    pub handlers: Vec<ConstraintHandler<VS>>,
+    all_diff_enforcer: RefCell<AllDifferentEnforcer<VS>>,
 }
 
-impl HandlerSet {
-    fn new(shape: &Shape) -> HandlerSet {
-        HandlerSet {
+impl<VS: ValueSet + Copy> HandlerSet<VS> {
+    fn new(shape: &Shape) -> Self {
+        Self {
             handlers: Vec::new(),
             all_diff_enforcer: RefCell::new(AllDifferentEnforcer::new(shape.num_values)),
         }
@@ -250,7 +254,10 @@ fn array_difference<T: PartialEq + Copy>(v0: &[T], v1: &[T]) -> Vec<T> {
     v0.iter().filter(|e| !v1.contains(e)).copied().collect()
 }
 
-fn make_house_intersections(houses: &[Vec<CellIndex>], shape: &Shape) -> Vec<ConstraintHandler> {
+fn make_house_intersections<VS>(
+    houses: &[Vec<CellIndex>],
+    shape: &Shape,
+) -> Vec<ConstraintHandler<VS>> {
     let box_size = shape.box_size as usize;
 
     let mut handlers = Vec::new();
@@ -268,7 +275,7 @@ fn make_house_intersections(houses: &[Vec<CellIndex>], shape: &Shape) -> Vec<Con
     handlers
 }
 
-pub fn make_handlers(constraint: &Constraint) -> HandlerSet {
+pub fn make_handlers<VS: ValueSet + Copy>(constraint: &Constraint) -> HandlerSet<VS> {
     let shape = &constraint.shape;
 
     let mut handler_set = HandlerSet::new(shape);
@@ -353,9 +360,9 @@ pub struct CellAccumulator {
 }
 
 impl CellAccumulator {
-    pub fn new(num_cells: usize, handler_set: &HandlerSet) -> CellAccumulator {
+    pub fn new<H: CellContainer>(num_cells: usize, handlers: &[H]) -> CellAccumulator {
         let mut cell_to_handlers = vec![Vec::new(); num_cells];
-        for (index, handler) in handler_set.handlers.iter().enumerate() {
+        for (index, handler) in handlers.iter().enumerate() {
             for cell in handler.cells() {
                 cell_to_handlers[*cell].push(index);
             }
@@ -363,7 +370,7 @@ impl CellAccumulator {
 
         CellAccumulator {
             cell_to_handlers,
-            linked_list: IndexLinkedList::new(handler_set.handlers.len()),
+            linked_list: IndexLinkedList::new(handlers.len()),
         }
     }
 
