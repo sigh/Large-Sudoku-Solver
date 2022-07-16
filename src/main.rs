@@ -2,7 +2,7 @@ use std::env;
 use std::fs;
 use std::rc::Rc;
 
-use large_sudoku_solver::parser;
+use large_sudoku_solver::io::parser;
 use large_sudoku_solver::solver;
 use large_sudoku_solver::types;
 
