@@ -12,6 +12,8 @@ use self::handlers::CellAccumulator;
 
 pub type Solution = Vec<CellValue>;
 
+pub const VALID_NUM_VALUE_RANGE: std::ops::RangeInclusive<u32> = 2..=128;
+
 pub fn solution_iter(
     constraint: &Constraint,
     progress_callback: Option<Box<dyn FnMut(&Counters)>>,
@@ -27,9 +29,15 @@ pub fn solution_iter(
         callback: progress_callback,
     };
 
-    let solver = Solver::<IntBitSet<i64>>::new(constraint, progress_config);
-
-    Box::new(solver)
+    match constraint.shape.num_values {
+        2..=32 => Box::new(Solver::<IntBitSet<i32>>::new(constraint, progress_config)),
+        33..=64 => Box::new(Solver::<IntBitSet<i64>>::new(constraint, progress_config)),
+        65..=128 => Box::new(Solver::<IntBitSet<i128>>::new(constraint, progress_config)),
+        _ => panic!(
+            "Grid too large. num_values: {}",
+            constraint.shape.num_values
+        ),
+    }
 }
 
 pub struct Contradition;
