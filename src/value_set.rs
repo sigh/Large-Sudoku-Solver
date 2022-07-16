@@ -3,8 +3,6 @@ extern crate derive_more;
 use derive_more::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, ShlAssign};
 use std::{fmt, mem};
 
-use crate::types::CellValue;
-
 #[derive(
     Copy, Clone, Debug, PartialEq, BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, ShlAssign,
 )]
@@ -14,12 +12,7 @@ impl ValueSet {
     pub const BITS: u32 = (mem::size_of::<Self>() as u32) * u8::BITS;
 
     #[inline]
-    pub fn from_value(value: CellValue) -> ValueSet {
-        ValueSet(1 << (value - 1))
-    }
-
-    #[inline]
-    pub fn from_value0(value: u32) -> ValueSet {
+    pub fn from_value(value: u32) -> ValueSet {
         ValueSet(1 << value)
     }
 
@@ -38,12 +31,7 @@ impl ValueSet {
     }
 
     #[inline]
-    pub fn value(&self) -> CellValue {
-        self.0.trailing_zeros() + 1
-    }
-
-    #[inline]
-    pub fn value0(&self) -> u32 {
+    pub fn value(&self) -> u32 {
         self.0.trailing_zeros()
     }
 
@@ -89,7 +77,7 @@ impl FromIterator<u32> for ValueSet {
         let mut c = ValueSet::empty();
 
         for i in iter {
-            c |= ValueSet::from_value0(i);
+            c |= ValueSet::from_value(i);
         }
 
         c

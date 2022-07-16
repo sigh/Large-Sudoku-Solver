@@ -1,5 +1,33 @@
+use std::fmt;
+
 pub type CellIndex = usize;
-pub type CellValue = u32;
+
+#[derive(Debug, Copy, Clone)]
+pub struct CellValue(u8);
+
+impl CellValue {
+    pub fn from_display_value(display_value: u8) -> CellValue {
+        CellValue(display_value - 1)
+    }
+
+    pub fn display_value(&self) -> u8 {
+        self.0 + 1
+    }
+
+    pub fn from_index(index: u8) -> CellValue {
+        CellValue(index)
+    }
+
+    pub fn index(&self) -> u8 {
+        self.0
+    }
+}
+
+impl fmt::Display for CellValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.display_value())
+    }
+}
 
 #[derive(Debug, Copy, Clone)]
 pub struct Shape {

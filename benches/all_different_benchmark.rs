@@ -26,7 +26,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("enforce_all_different solved", |b| {
         grid.splice(
             0..NUM_VALUES,
-            (0..NUM_VALUES).map(|v| ValueSet::from_value0(v as u32)),
+            (0..NUM_VALUES).map(|v| ValueSet::from_value(v as u32)),
         );
 
         b.iter(|| {

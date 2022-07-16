@@ -1,6 +1,7 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 
+use crate::types::CellValue;
 use crate::types::Constraint;
 use crate::types::FixedValues;
 use crate::types::Shape;
@@ -101,7 +102,10 @@ fn parse_short_text(input: &str) -> ParserResult {
         match c {
             '.' | '0' => (),
             c if c.is_digit(radix) => {
-                fixed_values.push((i, c.to_digit(radix).unwrap()));
+                fixed_values.push((
+                    i,
+                    CellValue::from_display_value(c.to_digit(radix).unwrap().try_into().unwrap()),
+                ));
             }
             c => {
                 return Err(format!("Unrecognized character: {}", c));
@@ -134,11 +138,11 @@ fn parse_grid_layout(input: &str) -> ParserResult {
         match *part {
             "." => (),
             _ => {
-                let value = part.parse::<u32>().expect("Unparsable number.");
-                if value == 0 || value > num_values {
+                let value = part.parse::<u8>().expect("Unparsable number.");
+                if value == 0 || value > num_values as u8 {
                     return Err(format!("Value out of range: {value}."));
                 }
-                fixed_values.push((i, value));
+                fixed_values.push((i, CellValue::from_display_value(value)));
             }
         }
     }

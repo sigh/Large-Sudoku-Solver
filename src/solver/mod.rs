@@ -37,7 +37,14 @@ pub fn solve(constraint: &Constraint) -> Vec<Vec<CellValue>> {
 
     let mut solutions = Vec::new();
     for (i, solution) in solver.enumerate() {
-        bar.println(format!("{:?}", solution));
+        bar.println(format!(
+            "[{}]",
+            solution
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(" ")
+        ));
         solutions.push(solution);
         if i > 0 {
             bar.println("Too many solutions.");
@@ -93,7 +100,9 @@ impl Iterator for Solver {
     fn next(&mut self) -> Option<Self::Item> {
         let grid = self.run()?;
 
-        let solution = grid.iter().map(|vs| vs.value());
+        let solution = grid
+            .iter()
+            .map(|vs| CellValue::from_index(vs.value() as u8));
 
         Some(solution.collect())
     }
@@ -109,7 +118,7 @@ impl Solver {
         let mut grids = vec![empty_grid; num_cells + 1];
 
         for (cell, value) in &constraint.fixed_values {
-            grids[0][*cell] = ValueSet::from_value(*value);
+            grids[0][*cell] = ValueSet::from_value(value.index().into());
         }
 
         Solver {

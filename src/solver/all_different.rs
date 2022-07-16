@@ -28,7 +28,7 @@ impl SccSet {
     }
 
     fn low_id(&self) -> u32 {
-        self.low.value0()
+        self.low.value()
     }
 }
 
@@ -123,7 +123,7 @@ impl AllDifferentEnforcer {
 
         while let Some(i_set) = unseen_cells.pop() {
             // Try the next unseen node.
-            let i = i_set.value0() as usize;
+            let i = i_set.value() as usize;
 
             // If it has no edges, ignore it (it's a fixed value).
             if cell_nodes[i].is_empty() {
@@ -142,7 +142,7 @@ impl AllDifferentEnforcer {
                 match stack_state {
                     StackState::NewCall => {
                         // First time we've seen u.
-                        let u_set = ValueSet::from_value0(u as u32);
+                        let u_set = ValueSet::from_value(u as u32);
                         unseen_cells.remove_set(u_set);
                         let u_inv = assignees_inv[u];
                         stack_cell_values |= u_inv;
@@ -155,7 +155,7 @@ impl AllDifferentEnforcer {
                         scc_set[u] = SccSet {
                             // low is represented as a ValueSet, so that
                             // bitwise OR preserves the min of the sets.
-                            low: ValueSet::from_value0(index),
+                            low: ValueSet::from_value(index),
                             values: u_inv,
                         };
                         index += 1;
@@ -174,7 +174,7 @@ impl AllDifferentEnforcer {
                 // Recurse into the next unseen node.
                 let unseen_adj = cell_nodes[u] & unseen_values;
                 if !unseen_adj.is_empty() {
-                    let n = assignees[unseen_adj.value0() as usize];
+                    let n = assignees[unseen_adj.value() as usize];
                     rec_stack.push(n);
                     stack_state = StackState::NewCall;
                     continue;
@@ -187,7 +187,7 @@ impl AllDifferentEnforcer {
                 let mut stack_adj = cell_nodes[u] & stack_cell_values & !scc_set_u.values;
                 scc_set_u.values |= stack_adj;
                 while let Some(v) = stack_adj.pop() {
-                    let n = assignees[v.value0() as usize];
+                    let n = assignees[v.value() as usize];
                     // We preserve the invariant that
                     // `low_set[u].value0() = lowlinks[u]`. This is because
                     // bitwise OR preserves the min of two sets.
@@ -242,7 +242,7 @@ impl AllDifferentEnforcer {
         {
             if !(candidate & cell_node).is_empty() {
                 assigned_values |= candidate;
-                self.assignees[candidate.value0() as usize] = i;
+                self.assignees[candidate.value() as usize] = i;
             }
         }
 
@@ -261,7 +261,7 @@ impl AllDifferentEnforcer {
             assigned_values |= if !values.is_empty() {
                 // If there is a free assignment, take it.
                 let value = values.min_set();
-                let v = value.value0();
+                let v = value.value();
                 self.assignees[v as usize] = i;
                 value
             } else {
@@ -271,7 +271,7 @@ impl AllDifferentEnforcer {
         }
 
         for (i, &assignee) in self.assignees.iter().enumerate() {
-            let i_set = ValueSet::from_value0(i as u32);
+            let i_set = ValueSet::from_value(i as u32);
             candidate_matching[assignee] = i_set;
         }
 
@@ -305,7 +305,7 @@ impl AllDifferentEnforcer {
 
             // Find the next value. We know this is already assigned.
             let value = values.min_set();
-            let v = value.value0();
+            let v = value.value();
             v_stack.push(v as usize);
 
             // Check if the next assignee is free.
@@ -313,7 +313,7 @@ impl AllDifferentEnforcer {
             let next_c = self.assignees[v as usize];
             let next_values = self.cell_nodes[next_c] & !assigned;
             if !next_values.is_empty() {
-                let next_v = next_values.value0();
+                let next_v = next_values.value();
                 self.assignees[next_v as usize] = next_c;
                 for (&iv, &ic) in zip(v_stack.iter(), c_stack.iter()) {
                     self.assignees[iv] = ic;
