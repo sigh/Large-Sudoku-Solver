@@ -8,7 +8,7 @@ use super::{Contradition, SolverResult};
 
 pub struct AllDifferentEnforcer {
     assignees: Vec<usize>,
-    ids: Vec<u32>,
+    ids: Vec<u8>,
     scc_set: Vec<SccSet>,
     rec_stack: Vec<usize>,
     data_stack: Vec<usize>,
@@ -27,7 +27,7 @@ impl SccSet {
         self.values |= other.values;
     }
 
-    fn low_id(&self) -> u32 {
+    fn low_id(&self) -> u8 {
         self.low.value()
     }
 }
@@ -117,7 +117,7 @@ impl AllDifferentEnforcer {
         let mut stack_cell_values = ValueSet::empty();
         let mut index = 0;
 
-        let full_set = ValueSet::full(cell_nodes.len() as u32);
+        let full_set = ValueSet::full(cell_nodes.len() as u8);
         let mut unseen_cells = full_set;
         let mut unseen_values = full_set;
 
@@ -142,7 +142,7 @@ impl AllDifferentEnforcer {
                 match stack_state {
                     StackState::NewCall => {
                         // First time we've seen u.
-                        let u_set = ValueSet::from_value(u as u32);
+                        let u_set = ValueSet::from_value(u as u8);
                         unseen_cells.remove_set(u_set);
                         let u_inv = assignees_inv[u];
                         stack_cell_values |= u_inv;
@@ -155,7 +155,7 @@ impl AllDifferentEnforcer {
                         scc_set[u] = SccSet {
                             // low is represented as a ValueSet, so that
                             // bitwise OR preserves the min of the sets.
-                            low: ValueSet::from_value(index),
+                            low: ValueSet::from_value(index as u8),
                             values: u_inv,
                         };
                         index += 1;
@@ -271,7 +271,7 @@ impl AllDifferentEnforcer {
         }
 
         for (i, &assignee) in self.assignees.iter().enumerate() {
-            let i_set = ValueSet::from_value(i as u32);
+            let i_set = ValueSet::from_value(i as u8);
             candidate_matching[assignee] = i_set;
         }
 

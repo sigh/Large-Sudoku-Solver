@@ -7,7 +7,7 @@ use large_sudoku_solver::value_set::ValueSet;
 fn criterion_benchmark(c: &mut Criterion) {
     const NUM_VALUES: usize = 16;
 
-    let full_set = ValueSet::full(NUM_VALUES as u32);
+    let full_set = ValueSet::full(NUM_VALUES as u8);
 
     let mut enforcer = all_different::AllDifferentEnforcer::new(NUM_VALUES as u32);
 
@@ -26,7 +26,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("enforce_all_different solved", |b| {
         grid.splice(
             0..NUM_VALUES,
-            (0..NUM_VALUES).map(|v| ValueSet::from_value(v as u32)),
+            (0..NUM_VALUES).map(|v| ValueSet::from_value(v as u8)),
         );
 
         b.iter(|| {

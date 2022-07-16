@@ -114,11 +114,11 @@ impl Solver {
         let handler_set = handlers::make_handlers(constraint);
         let cell_accumulator = CellAccumulator::new(num_cells, &handler_set);
 
-        let empty_grid = vec![ValueSet::full(constraint.shape.num_values); num_cells];
+        let empty_grid = vec![ValueSet::full(constraint.shape.num_values as u8); num_cells];
         let mut grids = vec![empty_grid; num_cells + 1];
 
         for (cell, value) in &constraint.fixed_values {
-            grids[0][*cell] = ValueSet::from_value(value.index().into());
+            grids[0][*cell] = ValueSet::from_value(value.index());
         }
 
         Solver {

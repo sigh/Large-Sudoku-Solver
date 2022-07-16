@@ -51,7 +51,7 @@ impl HouseHandler {
         HouseHandler {
             cells,
             num_values: shape.num_values as usize,
-            all_values: ValueSet::full(shape.num_values),
+            all_values: ValueSet::full(shape.num_values as u8),
             candidate_matching: vec![ValueSet::empty(); shape.num_values as usize],
         }
     }

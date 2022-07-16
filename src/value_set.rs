@@ -9,15 +9,15 @@ use std::{fmt, mem};
 pub struct ValueSet(i64);
 
 impl ValueSet {
-    pub const BITS: u32 = (mem::size_of::<Self>() as u32) * u8::BITS;
+    pub const BITS: u8 = (mem::size_of::<Self>() as u8) * (u8::BITS as u8);
 
     #[inline]
-    pub fn from_value(value: u32) -> ValueSet {
+    pub fn from_value(value: u8) -> ValueSet {
         ValueSet(1 << value)
     }
 
     #[inline]
-    pub fn full(num_values: u32) -> ValueSet {
+    pub fn full(num_values: u8) -> ValueSet {
         ValueSet(if num_values == Self::BITS {
             -1
         } else {
@@ -31,8 +31,8 @@ impl ValueSet {
     }
 
     #[inline]
-    pub fn value(&self) -> u32 {
-        self.0.trailing_zeros()
+    pub fn value(&self) -> u8 {
+        self.0.trailing_zeros() as u8
     }
 
     #[inline]
@@ -72,8 +72,8 @@ impl fmt::Display for ValueSet {
     }
 }
 
-impl FromIterator<u32> for ValueSet {
-    fn from_iter<I: IntoIterator<Item = u32>>(iter: I) -> Self {
+impl FromIterator<u8> for ValueSet {
+    fn from_iter<I: IntoIterator<Item = u8>>(iter: I) -> Self {
         let mut c = ValueSet::empty();
 
         for i in iter {

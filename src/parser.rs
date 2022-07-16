@@ -78,7 +78,7 @@ fn guess_dimension(num_cells: usize) -> Result<u32, String> {
     if dim < 2 {
         return Err(format!("Too few cells: {num_cells}."));
     }
-    if num_values > ValueSet::BITS {
+    if num_values > ValueSet::BITS.into() {
         return Err(format!("Grid side length too large: {num_values}."));
     }
 
