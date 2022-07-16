@@ -182,7 +182,7 @@ impl<VS: ValueSet + Copy> Runner<VS> {
     }
 
     fn record_backtrack(&mut self, cell: CellIndex) {
-        const BACKTRACK_DECAY_INTERVAL: u64 = 100;
+        const BACKTRACK_DECAY_INTERVAL: u64 = 50;
         self.counters.backtracks += 1;
         if 0 == self.counters.backtracks % BACKTRACK_DECAY_INTERVAL {
             for bt in &mut self.backtrack_triggers {
