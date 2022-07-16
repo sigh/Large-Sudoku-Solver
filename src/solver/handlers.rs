@@ -4,14 +4,14 @@ use crate::types::{CellIndex, Constraint, Shape};
 use crate::value_set::ValueSet;
 
 use super::all_different::AllDifferentEnforcer;
-use super::solver;
-use super::solver::Contradition;
+use super::runner;
+use super::runner::Contradition;
 
 pub fn enforce_constraints<VS: ValueSet + Copy>(
     grid: &mut [VS],
     cell_accumulator: &mut CellAccumulator,
     handler_set: &mut HandlerSet<VS>,
-) -> solver::Result {
+) -> runner::Result {
     let mut all_different_enforcer = handler_set.all_diff_enforcer.borrow_mut();
 
     while let Some(handler_index) = cell_accumulator.pop() {
@@ -56,7 +56,7 @@ impl<VS: ValueSet + Copy> HouseHandler<VS> {
         grid: &mut [VS],
         cell_accumulator: &mut CellAccumulator,
         all_diff_enforcer: &mut AllDifferentEnforcer<VS>,
-    ) -> solver::Result {
+    ) -> runner::Result {
         let mut all_values = VS::empty();
         let mut total_count = 0;
 
@@ -108,7 +108,7 @@ impl SameValueHandler {
         &self,
         grid: &mut [VS],
         cell_accumulator: &mut CellAccumulator,
-    ) -> solver::Result {
+    ) -> runner::Result {
         // Find the values in each cell set.
         let values0 = self
             .cells0
@@ -151,7 +151,7 @@ impl SameValueHandler {
         allowed_values: &VS,
         cells: &[CellIndex],
         cell_accumulator: &mut CellAccumulator,
-    ) -> solver::Result {
+    ) -> runner::Result {
         for &c0 in cells {
             let v = grid[c0].intersection(allowed_values);
             if v.is_empty() {

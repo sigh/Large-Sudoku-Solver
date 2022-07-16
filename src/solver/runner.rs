@@ -17,7 +17,7 @@ pub struct ProgressConfig {
     pub frequency_mask: u64,
 }
 
-pub struct Solver<VS: ValueSet> {
+pub struct Runner<VS: ValueSet> {
     num_cells: usize,
     cell_order: Vec<CellIndex>,
     rec_stack: Vec<usize>,
@@ -30,7 +30,7 @@ pub struct Solver<VS: ValueSet> {
     progress_callback: ProgressConfig,
 }
 
-impl<VS: ValueSet + Copy> Iterator for Solver<VS> {
+impl<VS: ValueSet + Copy> Iterator for Runner<VS> {
     type Item = Solution;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -44,7 +44,7 @@ impl<VS: ValueSet + Copy> Iterator for Solver<VS> {
     }
 }
 
-impl<VS: ValueSet + Copy> Solver<VS> {
+impl<VS: ValueSet + Copy> Runner<VS> {
     pub fn new(constraint: &Constraint, progress_callback: ProgressConfig) -> Self {
         let num_cells = constraint.shape.num_cells;
         let handler_set = handlers::make_handlers(constraint);
