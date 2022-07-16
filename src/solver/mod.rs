@@ -1,11 +1,6 @@
 pub mod all_different;
 mod handlers;
 
-use std::rc::Rc;
-
-use indicatif::ProgressBar;
-use indicatif::ProgressStyle;
-
 use crate::solver::handlers::HandlerSet;
 use crate::types::CellIndex;
 use crate::types::CellValue;
@@ -15,48 +10,26 @@ use crate::value_set::ValueSet;
 
 use self::handlers::CellAccumulator;
 
-pub fn solve(constraint: &Constraint) -> Vec<Vec<CellValue>> {
+pub type Solution = Vec<CellValue>;
+
+pub fn solution_iter(
+    constraint: &Constraint,
+    progress_callback: Option<Box<dyn FnMut(&Counters)>>,
+) -> Box<dyn Iterator<Item = Solution>> {
     const LOG_UPDATE_FREQUENCY: u64 = 10;
-    const SCALE: u64 = 10000;
-
-    let bar = Rc::new(ProgressBar::new(SCALE));
-    bar.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {wide_bar:cyan/blue} {percent}%\n{wide_msg}"),
-    );
-
-    let closure_bar = bar.clone();
-    let progress_callback = ProgressCallback {
-        callback: Box::new(move |counters| {
-            closure_bar.set_position((counters.progress_ratio * (SCALE as f64)) as u64);
-            closure_bar.set_message(format!("{:?}", counters));
-        }),
-        frequency_mask: (1 << LOG_UPDATE_FREQUENCY) - 1,
+    let frequency_mask = match &progress_callback {
+        Some(_) => (1 << LOG_UPDATE_FREQUENCY) - 1,
+        None => u64::MAX,
     };
 
-    let solver = Solver::<IntBitSet<i64>>::new(constraint, progress_callback);
+    let progress_config = ProgressCallback {
+        frequency_mask,
+        callback: progress_callback,
+    };
 
-    let mut solutions = Vec::new();
-    for (i, solution) in solver.enumerate() {
-        bar.println(format!(
-            "[{}]",
-            solution
-                .iter()
-                .map(|v| v.to_string())
-                .collect::<Vec<_>>()
-                .join(" ")
-        ));
-        solutions.push(solution);
-        if i > 0 {
-            bar.println("Too many solutions.");
-            break;
-        }
-    }
+    let solver = Solver::<IntBitSet<i64>>::new(constraint, progress_config);
 
-    bar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}"));
-    bar.finish();
-
-    solutions
+    Box::new(solver)
 }
 
 pub struct Contradition;
@@ -64,7 +37,7 @@ pub struct Contradition;
 pub type SolverResult = Result<(), Contradition>;
 
 struct ProgressCallback {
-    callback: Box<dyn FnMut(&Counters)>,
+    callback: Option<Box<dyn FnMut(&Counters)>>,
     frequency_mask: u64,
 }
 
@@ -72,12 +45,12 @@ type Grid<V> = Vec<V>;
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Counters {
-    values_tried: u64,
-    cells_searched: u64,
-    backtracks: u64,
-    guesses: u64,
-    solutions: u64,
-    progress_ratio: f64,
+    pub values_tried: u64,
+    pub cells_searched: u64,
+    pub backtracks: u64,
+    pub guesses: u64,
+    pub solutions: u64,
+    pub progress_ratio: f64,
 }
 
 struct Solver<VS: ValueSet> {
@@ -92,8 +65,6 @@ struct Solver<VS: ValueSet> {
     counters: Counters,
     progress_callback: ProgressCallback,
 }
-
-pub type Solution = Vec<CellValue>;
 
 impl<VS: ValueSet + Copy> Iterator for Solver<VS> {
     type Item = Solution;
@@ -206,7 +177,9 @@ impl<VS: ValueSet + Copy> Solver<VS> {
             self.counters.guesses += grid[cell].is_empty() as u64;
 
             if 0 == self.counters.guesses & progress_frequency_mask {
-                (self.progress_callback.callback)(&self.counters);
+                if let Some(f) = &mut self.progress_callback.callback {
+                    (f)(&self.counters);
+                }
             }
 
             // Copy the current cell values.
@@ -237,7 +210,9 @@ impl<VS: ValueSet + Copy> Solver<VS> {
         }
 
         // Send the final set of progress counters.
-        (self.progress_callback.callback)(&self.counters);
+        if let Some(f) = &mut self.progress_callback.callback {
+            (f)(&self.counters);
+        }
 
         None
     }
