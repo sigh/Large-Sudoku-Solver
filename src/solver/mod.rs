@@ -102,7 +102,7 @@ impl Iterator for Solver {
 
         let solution = grid
             .iter()
-            .map(|vs| CellValue::from_index(vs.value() as u8));
+            .map(|vs| CellValue::from_index(vs.value().unwrap() as u8));
 
         Some(solution.collect())
     }

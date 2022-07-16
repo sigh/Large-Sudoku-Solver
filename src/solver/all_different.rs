@@ -27,8 +27,8 @@ impl SccSet {
         self.values |= other.values;
     }
 
-    fn low_id(&self) -> u8 {
-        self.low.value()
+    fn low_id(&self) -> Option<u8> {
+        self.low.min()
     }
 }
 
@@ -172,8 +172,8 @@ impl AllDifferentEnforcer {
 
                 // Recurse into the next unseen node.
                 let unseen_adj = cell_nodes[u] & unseen_values;
-                if !unseen_adj.is_empty() {
-                    let n = assignees[unseen_adj.value() as usize];
+                if let Some(value) = unseen_adj.min() {
+                    let n = assignees[value as usize];
                     rec_stack.push(n);
                     stack_state = StackState::NewCall;
                     continue;
@@ -201,7 +201,7 @@ impl AllDifferentEnforcer {
 
                 // We have looked at all the relavent edges.
                 // If u is a root node, pop the scc_stack and generate an SCC.
-                if scc_set_u.low_id() == ids[u] {
+                if scc_set_u.low_id() == Some(ids[u]) {
                     // Remove the edges and truncate the stack.
                     let mask = !scc_set_u.values;
                     stack_cell_values &= mask;
@@ -239,9 +239,9 @@ impl AllDifferentEnforcer {
             .zip(self.cell_nodes.iter())
             .enumerate()
         {
-            if !(candidate & cell_node).is_empty() {
+            if let Some(candidate_value) = (candidate & cell_node).min() {
                 assigned_values |= candidate;
-                self.assignees[candidate.value() as usize] = i;
+                self.assignees[candidate_value as usize] = i;
             }
         }
 
@@ -257,14 +257,17 @@ impl AllDifferentEnforcer {
             }
 
             let values = self.cell_nodes[i] & !assigned_values;
-            assigned_values |= if !values.is_empty() {
-                // If there is a free assignment, take it.
-                let v = values.value();
-                self.assignees[v as usize] = i;
-                ValueSet::from_value(v)
-            } else {
-                // Otherwise, find a free value and update the matching.
-                self.update_matching(i, assigned_values)?
+            assigned_values |= match values.min() {
+                Some(v) => {
+                    // If there is a free assignment, take it.
+                    self.assignees[v as usize] = i;
+                    ValueSet::from_value(v)
+                }
+
+                None => {
+                    // Otherwise, find a free value and update the matching.
+                    self.update_matching(i, assigned_values)?
+                }
             };
         }
 
@@ -294,23 +297,24 @@ impl AllDifferentEnforcer {
             // Check any unseen values.
             let values = self.cell_nodes[c] & !seen;
 
-            // We've run out of legal values, backtrack.
-            if values.is_empty() {
-                c_stack.pop();
-                v_stack.pop();
-                continue;
-            }
+            // Find the next value, or backtrack if we are out of legal values.
+            let v = match values.min() {
+                None => {
+                    // Backtrack.
+                    c_stack.pop();
+                    v_stack.pop();
+                    continue;
+                }
+                Some(v) => v,
+            };
 
-            // Find the next value. We know this is already assigned.
-            let v = values.value();
             v_stack.push(v as usize);
 
             // Check if the next assignee is free.
             // If so then we can assign everything in the stack and return.
             let next_c = self.assignees[v as usize];
             let next_values = self.cell_nodes[next_c] & !assigned;
-            if !next_values.is_empty() {
-                let next_v = next_values.value();
+            if let Some(next_v) = next_values.min() {
                 self.assignees[next_v as usize] = next_c;
                 for (&iv, &ic) in zip(v_stack.iter(), c_stack.iter()) {
                     self.assignees[iv] = ic;

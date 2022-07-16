@@ -1,11 +1,9 @@
 extern crate derive_more;
 
-use derive_more::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, ShlAssign};
+use derive_more::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 use std::{fmt, mem};
 
-#[derive(
-    Copy, Clone, Debug, PartialEq, BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, ShlAssign,
-)]
+#[derive(Copy, Clone, Debug, PartialEq, BitAnd, BitAndAssign, BitOr, BitOrAssign, Not)]
 pub struct ValueSet(i64);
 
 impl ValueSet {
@@ -31,8 +29,20 @@ impl ValueSet {
     }
 
     #[inline]
-    pub fn value(&self) -> u8 {
-        self.0.trailing_zeros() as u8
+    pub fn value(&self) -> Option<u8> {
+        if self.count() != 1 {
+            return None;
+        }
+        self.min()
+    }
+
+    #[inline]
+    pub fn min(&self) -> Option<u8> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.0.trailing_zeros() as u8)
+        }
     }
 
     #[inline]
@@ -52,10 +62,7 @@ impl ValueSet {
 
     #[inline]
     pub fn pop(&mut self) -> Option<u8> {
-        if self.is_empty() {
-            return None;
-        }
-        let value = self.value();
+        let value = self.min()?;
         self.remove_set(ValueSet::from_value(value));
         Some(value)
     }
