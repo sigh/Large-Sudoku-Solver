@@ -195,7 +195,7 @@ impl Solver {
             // Find the next value to try.
             let value = match grid[cell].pop() {
                 None => continue,
-                Some(value) => value,
+                Some(v) => ValueSet::from_value(v),
             };
 
             // We know we want to come back to this index.

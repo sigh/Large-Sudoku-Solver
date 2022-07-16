@@ -121,16 +121,15 @@ impl AllDifferentEnforcer {
         let mut unseen_cells = full_set;
         let mut unseen_values = full_set;
 
-        while let Some(i_set) = unseen_cells.pop() {
+        while let Some(i) = unseen_cells.pop() {
             // Try the next unseen node.
-            let i = i_set.value() as usize;
 
             // If it has no edges, ignore it (it's a fixed value).
-            if cell_nodes[i].is_empty() {
+            if cell_nodes[i as usize].is_empty() {
                 continue;
             }
 
-            rec_stack.push(i);
+            rec_stack.push(i as usize);
             enum StackState {
                 NewCall,
                 NoResult,
@@ -186,8 +185,8 @@ impl AllDifferentEnforcer {
                 let mut scc_set_u = scc_set[u];
                 let mut stack_adj = cell_nodes[u] & stack_cell_values & !scc_set_u.values;
                 scc_set_u.values |= stack_adj;
-                while let Some(v) = stack_adj.pop() {
-                    let n = assignees[v.value() as usize];
+                while let Some(value) = stack_adj.pop() {
+                    let n = assignees[value as usize];
                     // We preserve the invariant that
                     // `low_set[u].value0() = lowlinks[u]`. This is because
                     // bitwise OR preserves the min of two sets.

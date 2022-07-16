@@ -51,13 +51,13 @@ impl ValueSet {
     }
 
     #[inline]
-    pub fn pop(&mut self) -> Option<ValueSet> {
+    pub fn pop(&mut self) -> Option<u8> {
         if self.is_empty() {
             return None;
         }
-        let min_set = ValueSet(self.0 & -self.0);
-        self.remove_set(min_set);
-        Some(min_set)
+        let value = self.value();
+        self.remove_set(ValueSet::from_value(value));
+        Some(value)
     }
 }
 
