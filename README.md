@@ -1,4 +1,4 @@
-# Large Suodku Solver
+# Large Sudoku Solver
 
 A solver for large sudoku grids (up to 121x121). Also solves Sudoku-X puzzles.
 
