@@ -227,7 +227,7 @@ impl<VS: ValueSet + Copy> Runner<VS> {
                 let score = if bt > 1 { count / bt } else { count };
                 score
             })
-            .unwrap();
+            .unwrap_or((0, &0));
 
         // Swap the best cell into place.
         cell_order.swap(best_index, cell_index);

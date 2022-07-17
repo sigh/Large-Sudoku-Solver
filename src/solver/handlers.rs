@@ -118,13 +118,13 @@ impl SameValueHandler {
             .iter()
             .map(|&c| grid[c])
             .reduce(|a, b| a.union(&b))
-            .unwrap();
+            .unwrap_or_else(|| VS::empty());
         let values1 = self
             .cells1
             .iter()
             .map(|&c| grid[c])
             .reduce(|a, b| a.union(&b))
-            .unwrap();
+            .unwrap_or_else(|| VS::empty());
 
         if values0.equals(&values1) {
             return Ok(());
