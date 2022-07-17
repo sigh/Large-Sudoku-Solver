@@ -200,8 +200,7 @@ impl<VS: ValueSet + Copy> Runner<VS> {
         for i in start_cell_index..cell_order.len() {
             let cell = cell_order[i];
 
-            let count = grid[cell].count();
-            if count <= 1 {
+            if !grid[cell].has_multiple() {
                 cell_order.swap(i, cell_index);
                 cell_index += 1;
                 self.counters.values_tried += 1;

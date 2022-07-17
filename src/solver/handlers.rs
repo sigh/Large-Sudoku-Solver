@@ -59,18 +59,20 @@ impl<VS: ValueSet + Copy> HouseHandler<VS> {
         all_diff_enforcer: &mut AllDifferentEnforcer<VS>,
     ) -> runner::Result {
         let mut all_values = VS::empty();
-        let mut total_count = 0;
+        // Counts the number of cells with only a single values.
+        let mut num_fixed = 0;
 
         for &cell in &self.cells {
             let v = grid[cell];
             all_values.add_set(&v);
-            total_count += v.count();
+            // Assumes that no cells have zero values.
+            num_fixed += (!v.has_multiple()) as usize;
         }
 
         if !all_values.equals(&self.all_values) {
             return Err(Contradition);
         }
-        if total_count == self.num_values {
+        if num_fixed == self.num_values {
             return Ok(());
         }
 

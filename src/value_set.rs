@@ -10,12 +10,18 @@ pub trait ValueSet {
 
     fn empty() -> Self;
 
+    fn count(&self) -> usize;
+
+    // count() == 0
     fn is_empty(&self) -> bool;
 
-    fn count(&self) -> usize;
+    // count() > 1
+    fn has_multiple(&self) -> bool;
 
     fn min(&self) -> Option<u8>;
 
+    // Return the value if it is unique, otherwise None.
+    // To get a value more efficiently without checking the count, use min().
     fn value(&self) -> Option<u8>;
 
     fn remove_set(&mut self, other: &Self);
@@ -69,13 +75,18 @@ where
     }
 
     #[inline]
+    fn count(&self) -> usize {
+        self.0.count_ones() as usize
+    }
+
+    #[inline]
     fn is_empty(&self) -> bool {
         self.0 == T::zero()
     }
 
     #[inline]
-    fn count(&self) -> usize {
-        self.0.count_ones() as usize
+    fn has_multiple(&self) -> bool {
+        self.0 & (self.0 - T::one()) != T::zero()
     }
 
     #[inline]
@@ -89,7 +100,7 @@ where
 
     #[inline]
     fn value(&self) -> Option<u8> {
-        if self.count() != 1 {
+        if self.is_empty() || self.has_multiple() {
             return None;
         }
         self.min()

@@ -210,6 +210,8 @@ impl<VS: ValueSet + Copy> AllDifferentEnforcer<VS> {
                     stack_cell_values.remove_set(&mask);
 
                     // We know exactly how many cells are in this scc.
+                    // NOTE: count seem more efficient than searching for
+                    //       `u` in the scc_stack.
                     let set_size = scc_set_u.values.count();
                     let remaining_size = scc_stack.len() - set_size;
 
@@ -249,7 +251,7 @@ impl<VS: ValueSet + Copy> AllDifferentEnforcer<VS> {
         }
 
         // If we assigned all the values we can bail early.
-        if assigned_values.count() == num_cells {
+        if assigned_values.equals(&ValueSet::full(num_cells as u8)) {
             return Ok(());
         }
 
