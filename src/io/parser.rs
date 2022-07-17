@@ -31,14 +31,13 @@ pub fn parse_text(input: &str) -> ParserResult {
         }
     }
 
-    if constraint.is_none() {
-        return Err(errors.join("\n"));
+    match constraint {
+        None => Err(errors.join("\n")),
+        Some(mut constraint) => {
+            constraint.sudoku_x = sudoku_x;
+            Ok(constraint)
+        }
     }
-
-    let mut constraint = constraint.unwrap();
-    constraint.sudoku_x = sudoku_x;
-
-    Ok(constraint)
 }
 
 fn remove_comments(input: &mut String) {
@@ -99,7 +98,7 @@ fn parse_short_text(input: &str) -> ParserResult {
 
     for (i, c) in input.chars().enumerate() {
         match c {
-            '.' | '0' => (),
+            '.' | '0' => {}
             c if c.is_digit(radix) => {
                 fixed_values.push((
                     i,

@@ -1,7 +1,7 @@
 extern crate derive_more;
 extern crate num;
 
-use std::{fmt, mem, ops};
+use std::{mem, ops};
 
 pub trait ValueSet {
     fn from_value(value: u8) -> Self;
@@ -10,6 +10,7 @@ pub trait ValueSet {
 
     fn empty() -> Self;
 
+    // Return the number of values in the set.
     fn count(&self) -> usize;
 
     // count() == 0
@@ -150,60 +151,6 @@ impl<T: Copy> Clone for IntBitSet<T> {
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for IntBitSet<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("IntBitSet").field(&self.0).finish()
-    }
-}
-
-impl<T: fmt::Display> fmt::Display for IntBitSet<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl<T: ops::Not<Output = T>> ops::Not for IntBitSet<T> {
-    type Output = IntBitSet<T>;
-
-    fn not(self) -> Self::Output {
-        IntBitSet::<T>(!self.0)
-    }
-}
-
-impl<T: ops::BitOr<Output = T>> ops::BitOr for IntBitSet<T> {
-    type Output = IntBitSet<T>;
-
-    fn bitor(self, rhs: Self) -> Self::Output {
-        IntBitSet::<T>(self.0 | rhs.0)
-    }
-}
-
-impl<T: ops::BitOrAssign> ops::BitOrAssign for IntBitSet<T> {
-    fn bitor_assign(&mut self, rhs: Self) {
-        self.0 |= rhs.0;
-    }
-}
-
-impl<T: ops::BitAnd<Output = T>> ops::BitAnd for IntBitSet<T> {
-    type Output = IntBitSet<T>;
-
-    fn bitand(self, rhs: Self) -> Self::Output {
-        IntBitSet::<T>(self.0 & rhs.0)
-    }
-}
-
-impl<T: ops::BitAndAssign> ops::BitAndAssign for IntBitSet<T> {
-    fn bitand_assign(&mut self, rhs: Self) {
-        self.0 &= rhs.0;
-    }
-}
-
-impl<T: PartialEq> PartialEq for IntBitSet<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
 impl<T> FromIterator<u8> for IntBitSet<T>
 where
     T: num::PrimInt
@@ -215,12 +162,9 @@ where
         + ops::BitOr<Output = T>,
 {
     fn from_iter<I: IntoIterator<Item = u8>>(iter: I) -> Self {
-        let mut c = IntBitSet::<T>::empty();
-
-        for i in iter {
-            c |= IntBitSet::<T>::from_value(i);
-        }
-
-        c
+        iter.into_iter()
+            .map(Self::from_value)
+            .reduce(|a, b| a.union(&b))
+            .unwrap_or_else(Self::empty)
     }
 }
