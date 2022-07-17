@@ -164,7 +164,6 @@ where
     fn from_iter<I: IntoIterator<Item = u8>>(iter: I) -> Self {
         iter.into_iter()
             .map(Self::from_value)
-            .reduce(|a, b| a.union(&b))
-            .unwrap_or_else(Self::empty)
+            .fold(Self::empty(), |a, b| a.union(&b))
     }
 }
