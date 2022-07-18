@@ -44,6 +44,7 @@ fn main() {
     if args.len() != 2 {
         panic!("Must specify an input filename.");
     }
+
     let filename = &args[1];
     let input = fs::read_to_string(filename).expect("Something went wrong reading the input.");
     let constraint = parser::parse_text(&input).expect("Could not parse input file.");

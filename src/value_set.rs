@@ -4,6 +4,8 @@ extern crate num;
 use std::{mem, ops};
 
 pub trait ValueSet: Copy {
+    const BITS: u16 = (mem::size_of::<Self>() as u16) * (u8::BITS as u16);
+
     fn from_value(value: u8) -> Self;
 
     fn full(num_values: u8) -> Self;
@@ -23,7 +25,13 @@ pub trait ValueSet: Copy {
 
     // Return the value if it is unique, otherwise None.
     // To get a value more efficiently without checking the count, use min().
-    fn value(&self) -> Option<u8>;
+    #[inline]
+    fn value(&self) -> Option<u8> {
+        if self.is_empty() || self.has_multiple() {
+            return None;
+        }
+        self.min()
+    }
 
     fn remove_set(&mut self, other: &Self);
 
@@ -37,14 +45,15 @@ pub trait ValueSet: Copy {
 
     fn equals(&self, other: &Self) -> bool;
 
-    fn pop(&mut self) -> Option<u8>;
+    #[inline]
+    fn pop(&mut self) -> Option<u8> {
+        let value = self.min()?;
+        self.remove_set(&Self::from_value(value));
+        Some(value)
+    }
 }
 
 pub struct IntBitSet<T>(T);
-
-impl<T> IntBitSet<T> {
-    pub const BITS: u8 = (mem::size_of::<Self>() as u8) * (u8::BITS as u8);
-}
 
 impl<T> ValueSet for IntBitSet<T>
 where
@@ -54,7 +63,8 @@ where
         + ops::BitAnd<Output = T>
         + ops::BitAndAssign
         + ops::BitOr<Output = T>
-        + ops::BitOrAssign,
+        + ops::BitOrAssign
+        + num::traits::WrappingSub,
 {
     #[inline]
     fn from_value(value: u8) -> Self {
@@ -63,7 +73,7 @@ where
 
     #[inline]
     fn full(num_values: u8) -> Self {
-        Self(if num_values == Self::BITS {
+        Self(if num_values == (Self::BITS as u8) {
             -T::one()
         } else {
             !(-T::one() << num_values)
@@ -87,7 +97,7 @@ where
 
     #[inline]
     fn has_multiple(&self) -> bool {
-        self.0 & (self.0 - T::one()) != T::zero()
+        self.0 & (self.0.wrapping_sub(&T::one())) != T::zero()
     }
 
     #[inline]
@@ -97,14 +107,6 @@ where
         } else {
             Some(self.0.trailing_zeros() as u8)
         }
-    }
-
-    #[inline]
-    fn value(&self) -> Option<u8> {
-        if self.is_empty() || self.has_multiple() {
-            return None;
-        }
-        self.min()
     }
 
     #[inline]
@@ -135,13 +137,6 @@ where
     fn equals(&self, other: &Self) -> bool {
         self.0 == other.0
     }
-
-    #[inline]
-    fn pop(&mut self) -> Option<u8> {
-        let value = self.min()?;
-        self.remove_set(&Self::from_value(value));
-        Some(value)
-    }
 }
 
 impl<T: Copy> Copy for IntBitSet<T> {}
@@ -159,7 +154,106 @@ where
         + ops::BitAndAssign
         + ops::BitAnd<Output = T>
         + ops::BitOrAssign
-        + ops::BitOr<Output = T>,
+        + ops::BitOr<Output = T>
+        + num::traits::WrappingSub,
+{
+    fn from_iter<I: IntoIterator<Item = u8>>(iter: I) -> Self {
+        iter.into_iter()
+            .map(Self::from_value)
+            .fold(Self::empty(), |a, b| a.union(&b))
+    }
+}
+
+pub struct RecValueSet<T>(T, T);
+
+impl<T: ValueSet> ValueSet for RecValueSet<T> {
+    #[inline]
+    fn from_value(value: u8) -> Self {
+        if value < (T::BITS as u8) {
+            Self(T::empty(), T::from_value(value))
+        } else {
+            Self(T::from_value(value - T::BITS as u8), T::empty())
+        }
+    }
+
+    #[inline]
+    fn full(num_values: u8) -> Self {
+        if num_values < (T::BITS as u8) {
+            Self(T::empty(), T::full(num_values))
+        } else {
+            Self(T::full(num_values - T::BITS as u8), T::full(T::BITS as u8))
+        }
+    }
+
+    #[inline]
+    fn empty() -> Self {
+        Self(T::empty(), T::empty())
+    }
+
+    #[inline]
+    fn count(&self) -> usize {
+        self.0.count() + self.1.count()
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.0.is_empty() && self.1.is_empty()
+    }
+
+    #[inline]
+    fn has_multiple(&self) -> bool {
+        (!self.0.is_empty() && !self.1.is_empty()) || self.0.has_multiple() || self.1.has_multiple()
+    }
+
+    #[inline]
+    fn min(&self) -> Option<u8> {
+        self.1
+            .min()
+            .or_else(|| self.0.min().map(|v| v + T::BITS as u8))
+    }
+
+    #[inline]
+    fn remove_set(&mut self, other: &Self) {
+        self.0.remove_set(&other.0);
+        self.1.remove_set(&other.1);
+    }
+
+    #[inline]
+    fn add_set(&mut self, other: &Self) {
+        self.0.add_set(&other.0);
+        self.1.add_set(&other.1);
+    }
+
+    #[inline]
+    fn intersection(&self, other: &Self) -> Self {
+        Self(self.0.intersection(&other.0), self.1.intersection(&other.1))
+    }
+
+    #[inline]
+    fn union(&self, other: &Self) -> Self {
+        Self(self.0.union(&other.0), self.1.union(&other.1))
+    }
+
+    #[inline]
+    fn without(&self, other: &Self) -> Self {
+        Self(self.0.without(&other.0), self.1.without(&other.1))
+    }
+
+    fn equals(&self, other: &Self) -> bool {
+        self.0.equals(&other.0) && self.1.equals(&other.1)
+    }
+}
+
+impl<T: Copy> Copy for RecValueSet<T> {}
+impl<T: Copy> Clone for RecValueSet<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> FromIterator<u8> for RecValueSet<T>
+where
+    T: ValueSet,
 {
     fn from_iter<I: IntoIterator<Item = u8>>(iter: I) -> Self {
         iter.into_iter()

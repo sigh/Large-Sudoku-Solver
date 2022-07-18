@@ -46,6 +46,8 @@ impl<VS: ValueSet> Iterator for Runner<VS> {
 
 impl<VS: ValueSet> Runner<VS> {
     pub fn new(constraint: &Constraint, progress_callback: ProgressConfig) -> Self {
+        assert!(constraint.shape.num_values <= VS::BITS as u32);
+
         let num_cells = constraint.shape.num_cells;
         let handler_set = handlers::make_handlers(constraint);
         let cell_accumulator = CellAccumulator::new(num_cells, &handler_set.handlers);
