@@ -7,17 +7,20 @@ use super::all_different::AllDifferentEnforcer;
 use super::cell_accumulator::{CellAccumulator, CellContainer};
 use super::runner;
 use super::runner::Contradition;
+use super::Counters;
 
 pub fn enforce_constraints<VS: ValueSet>(
     grid: &mut [VS],
     cell_accumulator: &mut CellAccumulator,
     handler_set: &mut HandlerSet<VS>,
+    counters: &mut Counters,
 ) -> runner::Result {
     let mut all_different_enforcer = handler_set.all_diff_enforcer.borrow_mut();
 
     while let Some(handler_index) = cell_accumulator.pop() {
         cell_accumulator.hold(handler_index);
         let handler = &mut handler_set.handlers[handler_index];
+        counters.constraints_processed += 1;
         match handler {
             ConstraintHandler::House(h) => {
                 h.enforce_consistency(grid, cell_accumulator, &mut all_different_enforcer)

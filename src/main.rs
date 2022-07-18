@@ -9,7 +9,7 @@ use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 use large_sudoku_solver::types::Constraint;
 
-fn run_solver(constraint: &Constraint) -> Vec<solver::Solution> {
+fn run_solver(constraint: &Constraint) {
     const SCALE: u64 = 10000;
     let bar = Rc::new(ProgressBar::new(SCALE));
     bar.set_style(
@@ -23,20 +23,27 @@ fn run_solver(constraint: &Constraint) -> Vec<solver::Solution> {
         closure_bar.set_message(output::counters(counters));
     });
 
-    let mut solutions = Vec::new();
     for solution in solver::solution_iter(constraint, Some(progress_callback)).take(2) {
-        bar.println(output::solution_compact(&solution));
-        solutions.push(solution);
-    }
-
-    if solutions.len() > 1 {
-        bar.println("Too many solutions.");
+        print_above_progress_bar(&output::solution_as_grid(constraint, &solution));
+        // Separate solutions by a new line.
+        println!();
     }
 
     bar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}"));
     bar.finish();
+}
 
-    solutions
+fn print_above_progress_bar(output: &str) {
+    // Erase the bar (two lines).
+    eprint!("\x1b[A\x1b[2K"); // Erase line above.
+    eprint!("\x1b[A\x1b[2K"); // Erase line above.
+    eprint!("\r"); // Bring cursor to start.
+
+    // Write the output.
+    println!("{}", output);
+
+    // Write another newline so that the output is not cleared by the bar.
+    eprintln!();
 }
 
 fn main() {
@@ -49,7 +56,5 @@ fn main() {
     let input = fs::read_to_string(filename).expect("Something went wrong reading the input.");
     let constraint = parser::parse_text(&input).expect("Could not parse input file.");
 
-    for solution in run_solver(&constraint) {
-        println!("{}", output::solution_as_grid(&constraint, &solution));
-    }
+    run_solver(&constraint);
 }

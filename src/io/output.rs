@@ -34,7 +34,7 @@ pub fn solution_compact(solution: &solver::Solution) -> String {
 
 pub fn counters(counters: &solver::Counters) -> String {
     format!(
-        "{{ solutions: {} guesses: {} values_tried: {} progress_ratio: {} }}",
-        counters.solutions, counters.guesses, counters.values_tried, counters.progress_ratio
+        "{{ solutions: {} guesses: {} values_tried: {} constraints_processed: {} progress_ratio: {} }}",
+        counters.solutions, counters.guesses, counters.values_tried, counters.constraints_processed, counters.progress_ratio
     )
 }

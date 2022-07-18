@@ -16,11 +16,12 @@ pub type ProgressCallback = dyn FnMut(&Counters);
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Counters {
+    pub solutions: u64,
+    pub guesses: u64,
+    pub constraints_processed: u64,
     pub values_tried: u64,
     pub cells_searched: u64,
     pub backtracks: u64,
-    pub guesses: u64,
-    pub solutions: u64,
     pub progress_ratio: f64,
 }
 

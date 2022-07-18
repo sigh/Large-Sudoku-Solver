@@ -84,6 +84,7 @@ impl<VS: ValueSet> Runner<VS> {
                 &mut self.grid_stack[0],
                 &mut self.cell_accumulator,
                 &mut self.handler_set,
+                &mut self.counters,
             )
             .is_ok()
             {
@@ -159,6 +160,7 @@ impl<VS: ValueSet> Runner<VS> {
                 grid,
                 &mut self.cell_accumulator,
                 &mut self.handler_set,
+                &mut self.counters,
             ) {
                 Ok(()) => {
                     // Recurse to the new cell.
