@@ -1,6 +1,6 @@
 # Large Sudoku Solver
 
-A solver for large sudoku grids (up to 256x256). Also solves Sudoku-X puzzles.
+A solver for large sudoku grids (up to 512x512). Also solves Sudoku-X puzzles.
 
 ## Running
 

@@ -25,7 +25,7 @@ pub struct Runner<VS: ValueSet> {
     backtrack_triggers: Vec<u32>,
     progress_ratio_stack: Vec<f64>,
     counters: Counters,
-    progress_callback: ProgressConfig,
+    progress_config: ProgressConfig,
 }
 
 impl<VS: ValueSet> Iterator for Runner<VS> {
@@ -43,7 +43,7 @@ impl<VS: ValueSet> Iterator for Runner<VS> {
 }
 
 impl<VS: ValueSet> Runner<VS> {
-    pub fn new(constraint: &Constraint, progress_callback: ProgressConfig) -> Self {
+    pub fn new(constraint: &Constraint, progress_config: ProgressConfig) -> Self {
         assert!(constraint.shape.num_values <= VS::BITS as u32);
 
         let num_cells = constraint.shape.num_cells;
@@ -67,12 +67,12 @@ impl<VS: ValueSet> Runner<VS> {
             backtrack_triggers: vec![0; num_cells],
             progress_ratio_stack: vec![1.0; num_cells + 1],
             counters: Counters::default(),
-            progress_callback,
+            progress_config,
         }
     }
 
     fn run(&mut self) -> Option<&Grid<VS>> {
-        let progress_frequency_mask = self.progress_callback.frequency_mask;
+        let progress_frequency_mask = self.progress_config.frequency_mask;
         let mut new_cell_index = false;
 
         if self.counters.values_tried == 0 {
@@ -110,6 +110,7 @@ impl<VS: ValueSet> Runner<VS> {
                 if cell_index == self.num_cells {
                     self.counters.solutions += 1;
                     self.counters.progress_ratio += self.progress_ratio_stack[grid_index];
+                    maybe_call_callback(&mut self.progress_config.callback, &self.counters);
                     return Some(&self.grid_stack[grid_index]);
                 }
 
@@ -142,9 +143,7 @@ impl<VS: ValueSet> Runner<VS> {
             self.counters.guesses += grid[cell].is_empty() as u64;
 
             if 0 == self.counters.guesses & progress_frequency_mask {
-                if let Some(f) = &mut self.progress_callback.callback {
-                    (f)(&self.counters);
-                }
+                maybe_call_callback(&mut self.progress_config.callback, &self.counters);
             }
 
             // Copy the current cell values.
@@ -176,9 +175,7 @@ impl<VS: ValueSet> Runner<VS> {
         }
 
         // Send the final set of progress counters.
-        if let Some(f) = &mut self.progress_callback.callback {
-            (f)(&self.counters);
-        }
+        maybe_call_callback(&mut self.progress_config.callback, &self.counters);
 
         None
     }
@@ -233,5 +230,11 @@ impl<VS: ValueSet> Runner<VS> {
 
         // Swap the best cell into place.
         cell_order.swap(best_index, cell_index);
+    }
+}
+
+fn maybe_call_callback<A, F: FnMut(A)>(f: &mut Option<F>, arg: A) {
+    if let Some(f) = f {
+        (f)(arg);
     }
 }
