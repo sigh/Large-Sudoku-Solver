@@ -16,6 +16,8 @@ fn run_solver(constraint: &Constraint) {
         ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {wide_bar:cyan/blue} {percent}%\n{wide_msg}"),
     );
+    bar.set_position(0);
+    bar.set_message("Initializing...");
 
     let closure_bar = bar.clone();
     let progress_callback = Box::new(move |counters: &solver::Counters| {

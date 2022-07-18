@@ -271,12 +271,23 @@ fn make_house_intersections<VS>(
 }
 
 pub fn make_handlers<VS: ValueSet>(constraint: &Constraint) -> HandlerSet<VS> {
+    const MAX_SIZE_FOR_INTERSECTIONS: u32 = 100;
+
     let shape = &constraint.shape;
 
     let mut handler_set = HandlerSet::new(shape);
 
     let houses = make_houses(constraint);
-    let mut intersection_handlers = make_house_intersections(&houses, shape);
+
+    // Don't create intersections if the grid is too large.
+    // The process below is quadratic, so it gets really slow. In addition,
+    // the only grids people create of this size are trivially solvable without
+    // backtracking.
+    let mut intersection_handlers = if shape.num_values <= MAX_SIZE_FOR_INTERSECTIONS {
+        make_house_intersections(&houses, shape)
+    } else {
+        Vec::new()
+    };
 
     for house in houses {
         let handler = ConstraintHandler::House(HouseHandler::new(house, shape));

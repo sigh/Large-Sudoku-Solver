@@ -9,7 +9,7 @@ use crate::value_set::{IntBitSet, RecValueSet};
 
 use runner::Runner;
 
-pub const VALID_NUM_VALUE_RANGE: std::ops::RangeInclusive<u32> = 2..=256;
+pub const VALID_NUM_VALUE_RANGE: std::ops::RangeInclusive<u32> = 2..=512;
 
 pub type Solution = Vec<CellValue>;
 pub type ProgressCallback = dyn FnMut(&Counters);
@@ -45,6 +45,10 @@ pub fn solution_iter(
         33..=64 => Box::new(Runner::<IntBitSet<i64>>::new(constraint, progress_config)),
         65..=128 => Box::new(Runner::<IntBitSet<i128>>::new(constraint, progress_config)),
         129..=256 => Box::new(Runner::<RecValueSet<IntBitSet<i128>>>::new(
+            constraint,
+            progress_config,
+        )),
+        257..=512 => Box::new(Runner::<RecValueSet<RecValueSet<IntBitSet<i128>>>>::new(
             constraint,
             progress_config,
         )),

@@ -51,7 +51,7 @@ impl<VS: ValueSet> Runner<VS> {
         let cell_accumulator = CellAccumulator::new(num_cells, &handler_set.handlers);
 
         let empty_grid = vec![VS::full(constraint.shape.num_values as ValueType); num_cells];
-        let mut grids = vec![empty_grid; num_cells + 1];
+        let mut grids = vec![empty_grid];
 
         for (cell, value) in &constraint.fixed_values {
             grids[0][*cell] = VS::from_value(value.index());
@@ -76,6 +76,8 @@ impl<VS: ValueSet> Runner<VS> {
         let mut new_cell_index = false;
 
         if self.counters.values_tried == 0 {
+            maybe_call_callback(&mut self.progress_config.callback, &self.counters);
+
             // Initialize by finding and running all handlers.
             for i in 0..self.num_cells {
                 self.cell_accumulator.add(i);
@@ -92,6 +94,7 @@ impl<VS: ValueSet> Runner<VS> {
                 self.rec_stack.push(0);
                 new_cell_index = true;
             }
+            maybe_call_callback(&mut self.progress_config.callback, &self.counters);
         }
 
         while let Some(mut cell_index) = self.rec_stack.pop() {
@@ -125,32 +128,36 @@ impl<VS: ValueSet> Runner<VS> {
             }
 
             // Now we know that the next cell has (or had) multiple values.
-
-            let (grids_front, grids_back) = self.grid_stack.split_at_mut(grid_index + 1);
-            let mut grid = &mut grids_front[grid_index];
             let cell = self.cell_order[cell_index];
 
-            // Find the next value to try.
-            let value = match grid[cell].pop() {
-                None => continue,
-                Some(v) => VS::from_value(v),
+            let value = {
+                // Find the next value to try.
+                // NOTE: Do this inside a block so that grid is only borrowed
+                //       in this scope. Otherwise the borrow checker gets in the
+                //       way of us copying the grid to the next index.
+                let grid = &mut self.grid_stack[grid_index];
+                let value = match grid[cell].pop() {
+                    None => continue,
+                    Some(v) => VS::from_value(v),
+                };
+
+                // We know we want to come back to this index.
+                self.rec_stack.push(cell_index);
+
+                self.counters.values_tried += 1;
+                self.counters.guesses += grid[cell].is_empty() as u64;
+
+                if 0 == self.counters.guesses & progress_frequency_mask {
+                    maybe_call_callback(&mut self.progress_config.callback, &self.counters);
+                }
+
+                value
             };
 
-            // We know we want to come back to this index.
-            self.rec_stack.push(cell_index);
-
-            self.counters.values_tried += 1;
-            self.counters.guesses += grid[cell].is_empty() as u64;
-
-            if 0 == self.counters.guesses & progress_frequency_mask {
-                maybe_call_callback(&mut self.progress_config.callback, &self.counters);
-            }
-
-            // Copy the current cell values.
-            grids_back[0].copy_from_slice(grid);
+            self.push_grid_onto_stack(grid_index);
 
             // Update the grid with the trial value.
-            grid = &mut grids_back[0];
+            let grid = &mut self.grid_stack[grid_index + 1];
             grid[cell] = value;
 
             // Propograte constraints.
@@ -178,6 +185,19 @@ impl<VS: ValueSet> Runner<VS> {
         maybe_call_callback(&mut self.progress_config.callback, &self.counters);
 
         None
+    }
+
+    // Copy grid from self.grid_stack[grid_index] to self.grid_stack[grid_index+1].
+    fn push_grid_onto_stack(&mut self, grid_index: usize) {
+        if self.grid_stack.len() == grid_index + 1 {
+            // We've run out of space on the stack, so we need to push onto the
+            // end.
+            self.grid_stack.extend_from_within(grid_index..);
+        } else {
+            // Otherwise we copy over the existing elements.
+            let (grids_front, grids_back) = self.grid_stack.split_at_mut(grid_index + 1);
+            grids_back[0].copy_from_slice(&grids_front[grid_index]);
+        }
     }
 
     fn record_backtrack(&mut self, cell: CellIndex) {
