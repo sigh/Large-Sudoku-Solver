@@ -15,7 +15,7 @@ pub fn parse_text(input: &str) -> ParserResult {
     let parse_fns: Vec<fn(&str) -> ParserResult> = vec![parse_short_text, parse_grid_layout];
 
     let mut constraint = None;
-    let mut errors = Vec::new();
+    let mut errors = vec![String::from("Could not parse grid:")];
     for parse_fn in parse_fns {
         match (parse_fn)(&input) {
             Ok(parsed) => {
@@ -73,7 +73,7 @@ fn guess_dimension(num_cells: usize) -> Result<u32, String> {
 
     if !solver::VALID_NUM_VALUE_RANGE.contains(&num_values) {
         return Err(format!(
-            "Grid size not supported. Side length: {num_values}."
+            "Grid size not supported - side length: {num_values}."
         ));
     }
 

@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::process::ExitCode;
 use std::rc::Rc;
 
 use large_sudoku_solver::io::{output, parser};
@@ -48,15 +49,28 @@ fn print_above_progress_bar(output: &str) {
     eprintln!();
 }
 
-fn main() {
+fn main_with_result() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
-        panic!("Must specify an input filename.");
+        return Err(String::from("Must specify an input filename."));
     }
 
     let filename = &args[1];
-    let input = fs::read_to_string(filename).expect("Something went wrong reading the input.");
-    let constraint = parser::parse_text(&input).expect("Could not parse input file.");
+    let input = fs::read_to_string(filename)
+        .map_err(|e| format!("Could not read file {}: {}", filename, e.to_string()))?;
+    let constraint = parser::parse_text(&input)?;
 
     run_solver(&constraint);
+
+    Ok(())
+}
+
+fn main() -> ExitCode {
+    match main_with_result() {
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            ExitCode::FAILURE
+        }
+        Ok(_) => ExitCode::SUCCESS,
+    }
 }
