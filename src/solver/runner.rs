@@ -30,7 +30,7 @@ pub struct Runner<VS: ValueSet> {
     progress_callback: ProgressConfig,
 }
 
-impl<VS: ValueSet + Copy> Iterator for Runner<VS> {
+impl<VS: ValueSet> Iterator for Runner<VS> {
     type Item = Solution;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -44,7 +44,7 @@ impl<VS: ValueSet + Copy> Iterator for Runner<VS> {
     }
 }
 
-impl<VS: ValueSet + Copy> Runner<VS> {
+impl<VS: ValueSet> Runner<VS> {
     pub fn new(constraint: &Constraint, progress_callback: ProgressConfig) -> Self {
         let num_cells = constraint.shape.num_cells;
         let handler_set = handlers::make_handlers(constraint);

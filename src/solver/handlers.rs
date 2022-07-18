@@ -8,7 +8,7 @@ use super::cell_accumulator::{CellAccumulator, CellContainer};
 use super::runner;
 use super::runner::Contradition;
 
-pub fn enforce_constraints<VS: ValueSet + Copy>(
+pub fn enforce_constraints<VS: ValueSet>(
     grid: &mut [VS],
     cell_accumulator: &mut CellAccumulator,
     handler_set: &mut HandlerSet<VS>,
@@ -42,7 +42,7 @@ pub struct HouseHandler<VS> {
     candidate_matching: Vec<VS>,
 }
 
-impl<VS: ValueSet + Copy> HouseHandler<VS> {
+impl<VS: ValueSet> HouseHandler<VS> {
     pub fn new(cells: Vec<CellIndex>, shape: &Shape) -> Self {
         Self {
             cells,
@@ -107,7 +107,7 @@ impl SameValueHandler {
         }
     }
 
-    fn enforce_consistency<VS: ValueSet + Copy>(
+    fn enforce_consistency<VS: ValueSet>(
         &self,
         grid: &mut [VS],
         cell_accumulator: &mut CellAccumulator,
@@ -176,7 +176,7 @@ pub enum ConstraintHandler<VS> {
     SameValue(SameValueHandler),
 }
 
-impl<VS: ValueSet + Copy> CellContainer for ConstraintHandler<VS> {
+impl<VS: ValueSet> CellContainer for ConstraintHandler<VS> {
     fn cells(&self) -> &[CellIndex] {
         match self {
             ConstraintHandler::House(h) => h.cells(),
@@ -190,7 +190,7 @@ pub struct HandlerSet<VS: ValueSet> {
     all_diff_enforcer: RefCell<AllDifferentEnforcer<VS>>,
 }
 
-impl<VS: ValueSet + Copy> HandlerSet<VS> {
+impl<VS: ValueSet> HandlerSet<VS> {
     fn new(shape: &Shape) -> Self {
         Self {
             handlers: Vec::new(),
@@ -267,7 +267,7 @@ fn make_house_intersections<VS>(
     handlers
 }
 
-pub fn make_handlers<VS: ValueSet + Copy>(constraint: &Constraint) -> HandlerSet<VS> {
+pub fn make_handlers<VS: ValueSet>(constraint: &Constraint) -> HandlerSet<VS> {
     let shape = &constraint.shape;
 
     let mut handler_set = HandlerSet::new(shape);

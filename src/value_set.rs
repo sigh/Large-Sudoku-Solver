@@ -3,7 +3,7 @@ extern crate num;
 
 use std::{mem, ops};
 
-pub trait ValueSet {
+pub trait ValueSet: Copy {
     fn from_value(value: u8) -> Self;
 
     fn full(num_values: u8) -> Self;

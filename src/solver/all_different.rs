@@ -33,7 +33,7 @@ impl<VS: ValueSet> SccSet<VS> {
     }
 }
 
-impl<VS: ValueSet + Copy> AllDifferentEnforcer<VS> {
+impl<VS: ValueSet> AllDifferentEnforcer<VS> {
     pub fn new(num_values: u32) -> Self {
         let num_values = num_values as usize;
         Self {
