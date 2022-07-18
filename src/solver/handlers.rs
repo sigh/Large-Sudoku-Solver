@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use crate::types::{CellIndex, Constraint, Shape};
+use crate::types::{CellIndex, Constraint, Shape, ValueType};
 use crate::value_set::ValueSet;
 
 use super::all_different::AllDifferentEnforcer;
@@ -47,7 +47,7 @@ impl<VS: ValueSet> HouseHandler<VS> {
         Self {
             cells,
             num_values: shape.num_values as usize,
-            all_values: VS::full(shape.num_values as u8),
+            all_values: VS::full(shape.num_values as ValueType),
             candidate_matching: vec![VS::empty(); shape.num_values as usize],
         }
     }

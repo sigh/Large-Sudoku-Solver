@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use large_sudoku_solver::solver::all_different;
-use large_sudoku_solver::types::CellIndex;
+use large_sudoku_solver::types::{CellIndex, ValueType};
 use large_sudoku_solver::value_set::{IntBitSet, ValueSet};
 
 type ValueSetType = IntBitSet<i64>;
@@ -9,7 +9,7 @@ type ValueSetType = IntBitSet<i64>;
 fn criterion_benchmark(c: &mut Criterion) {
     const NUM_VALUES: usize = 16;
 
-    let full_set = ValueSetType::full(NUM_VALUES as u8);
+    let full_set = ValueSetType::full(NUM_VALUES as ValueType);
 
     let mut enforcer = all_different::AllDifferentEnforcer::new(NUM_VALUES as u32);
 
@@ -28,7 +28,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("enforce_all_different solved", |b| {
         grid.splice(
             0..NUM_VALUES,
-            (0..NUM_VALUES).map(|v| ValueSetType::from_value(v as u8)),
+            (0..NUM_VALUES).map(|v| ValueSetType::from_value(v as ValueType)),
         );
 
         b.iter(|| {

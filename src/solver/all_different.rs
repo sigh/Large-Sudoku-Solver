@@ -1,6 +1,6 @@
 use std::iter::zip;
 
-use crate::types::CellIndex;
+use crate::types::{CellIndex, ValueType};
 use crate::value_set::ValueSet;
 
 use super::cell_accumulator::CellAccumulator;
@@ -9,7 +9,7 @@ use super::runner::Contradition;
 
 pub struct AllDifferentEnforcer<VS: ValueSet> {
     assignees: Vec<usize>,
-    ids: Vec<u8>,
+    ids: Vec<ValueType>,
     scc_set: Vec<SccSet<VS>>,
     rec_stack: Vec<usize>,
     data_stack: Vec<usize>,
@@ -28,7 +28,7 @@ impl<VS: ValueSet> SccSet<VS> {
         self.values.add_set(&other.values);
     }
 
-    fn low_id(&self) -> Option<u8> {
+    fn low_id(&self) -> Option<ValueType> {
         self.low.min()
     }
 }
@@ -118,7 +118,7 @@ impl<VS: ValueSet> AllDifferentEnforcer<VS> {
         let mut stack_cell_values = VS::empty();
         let mut index = 0;
 
-        let full_set = VS::full(cell_nodes.len() as u8);
+        let full_set = VS::full(cell_nodes.len() as ValueType);
         let mut unseen_cells = full_set;
         let mut unseen_values = full_set;
 
@@ -142,7 +142,7 @@ impl<VS: ValueSet> AllDifferentEnforcer<VS> {
                 match stack_state {
                     StackState::NewCall => {
                         // First time we've seen u.
-                        let u_set = VS::from_value(u as u8);
+                        let u_set = VS::from_value(u as ValueType);
                         unseen_cells.remove_set(&u_set);
                         let u_inv = assignees_inv[u];
                         stack_cell_values.add_set(&u_inv);
@@ -155,7 +155,7 @@ impl<VS: ValueSet> AllDifferentEnforcer<VS> {
                         scc_set[u] = SccSet {
                             // low is represented as a VS, so that
                             // bitwise OR preserves the min of the sets.
-                            low: VS::from_value(index as u8),
+                            low: VS::from_value(index as ValueType),
                             values: u_inv,
                         };
                         index += 1;
@@ -251,7 +251,7 @@ impl<VS: ValueSet> AllDifferentEnforcer<VS> {
         }
 
         // If we assigned all the values we can bail early.
-        if assigned_values.equals(&ValueSet::full(num_cells as u8)) {
+        if assigned_values.equals(&ValueSet::full(num_cells as ValueType)) {
             return Ok(());
         }
 
@@ -277,7 +277,7 @@ impl<VS: ValueSet> AllDifferentEnforcer<VS> {
         }
 
         for (i, &assignee) in self.assignees.iter().enumerate() {
-            let i_set = VS::from_value(i as u8);
+            let i_set = VS::from_value(i as ValueType);
             candidate_matching[assignee] = i_set;
         }
 

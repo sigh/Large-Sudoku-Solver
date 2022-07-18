@@ -2,10 +2,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use crate::solver;
-use crate::types::CellValue;
-use crate::types::Constraint;
-use crate::types::FixedValues;
-use crate::types::Shape;
+use crate::types::{CellValue, Constraint, FixedValues, Shape, ValueType};
 
 pub type ParserResult = Result<Constraint, String>;
 
@@ -136,8 +133,8 @@ fn parse_grid_layout(input: &str) -> ParserResult {
         match *part {
             "." => (),
             _ => {
-                let value = part.parse::<u8>().expect("Unparsable number.");
-                if value == 0 || value > num_values as u8 {
+                let value = part.parse::<ValueType>().expect("Unparsable number.");
+                if value == 0 || value > num_values as ValueType {
                     return Err(format!("Value out of range: {value}."));
                 }
                 fixed_values.push((i, CellValue::from_display_value(value)));

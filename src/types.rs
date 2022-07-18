@@ -1,24 +1,25 @@
 use std::fmt;
 
 pub type CellIndex = usize;
+pub type ValueType = u16;
 
 #[derive(Debug, Copy, Clone)]
-pub struct CellValue(u8);
+pub struct CellValue(ValueType);
 
 impl CellValue {
-    pub fn from_display_value(display_value: u8) -> CellValue {
+    pub fn from_display_value(display_value: ValueType) -> CellValue {
         CellValue(display_value - 1)
     }
 
-    pub fn display_value(&self) -> u8 {
+    pub fn display_value(&self) -> ValueType {
         self.0 + 1
     }
 
-    pub fn from_index(index: u8) -> CellValue {
+    pub fn from_index(index: ValueType) -> CellValue {
         CellValue(index)
     }
 
-    pub fn index(&self) -> u8 {
+    pub fn index(&self) -> ValueType {
         self.0
     }
 }

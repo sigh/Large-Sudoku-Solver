@@ -1,6 +1,4 @@
-use crate::types::CellIndex;
-use crate::types::CellValue;
-use crate::types::Constraint;
+use crate::types::{CellIndex, CellValue, Constraint, ValueType};
 use crate::value_set::ValueSet;
 
 use super::cell_accumulator::CellAccumulator;
@@ -38,7 +36,7 @@ impl<VS: ValueSet> Iterator for Runner<VS> {
 
         let solution = grid
             .iter()
-            .map(|vs| CellValue::from_index(vs.value().unwrap() as u8));
+            .map(|vs| CellValue::from_index(vs.value().unwrap() as ValueType));
 
         Some(solution.collect())
     }
@@ -52,7 +50,7 @@ impl<VS: ValueSet> Runner<VS> {
         let handler_set = handlers::make_handlers(constraint);
         let cell_accumulator = CellAccumulator::new(num_cells, &handler_set.handlers);
 
-        let empty_grid = vec![VS::full(constraint.shape.num_values as u8); num_cells];
+        let empty_grid = vec![VS::full(constraint.shape.num_values as ValueType); num_cells];
         let mut grids = vec![empty_grid; num_cells + 1];
 
         for (cell, value) in &constraint.fixed_values {

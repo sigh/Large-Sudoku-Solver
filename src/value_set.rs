@@ -3,12 +3,14 @@ extern crate num;
 
 use std::{mem, ops};
 
+use crate::types::ValueType;
+
 pub trait ValueSet: Copy {
-    const BITS: u16 = (mem::size_of::<Self>() as u16) * (u8::BITS as u16);
+    const BITS: ValueType = (mem::size_of::<Self>() as ValueType) * (u8::BITS as ValueType);
 
-    fn from_value(value: u8) -> Self;
+    fn from_value(value: ValueType) -> Self;
 
-    fn full(num_values: u8) -> Self;
+    fn full(num_values: ValueType) -> Self;
 
     fn empty() -> Self;
 
@@ -21,12 +23,12 @@ pub trait ValueSet: Copy {
     // count() > 1
     fn has_multiple(&self) -> bool;
 
-    fn min(&self) -> Option<u8>;
+    fn min(&self) -> Option<ValueType>;
 
     // Return the value if it is unique, otherwise None.
     // To get a value more efficiently without checking the count, use min().
     #[inline]
-    fn value(&self) -> Option<u8> {
+    fn value(&self) -> Option<ValueType> {
         if self.is_empty() || self.has_multiple() {
             return None;
         }
@@ -46,7 +48,7 @@ pub trait ValueSet: Copy {
     fn equals(&self, other: &Self) -> bool;
 
     #[inline]
-    fn pop(&mut self) -> Option<u8> {
+    fn pop(&mut self) -> Option<ValueType> {
         let value = self.min()?;
         self.remove_set(&Self::from_value(value));
         Some(value)
@@ -58,7 +60,7 @@ pub struct IntBitSet<T>(T);
 impl<T> ValueSet for IntBitSet<T>
 where
     T: num::PrimInt
-        + ops::Shl<u8, Output = T>
+        + ops::Shl<ValueType, Output = T>
         + ops::Neg<Output = T>
         + ops::BitAnd<Output = T>
         + ops::BitAndAssign
@@ -67,13 +69,13 @@ where
         + num::traits::WrappingSub,
 {
     #[inline]
-    fn from_value(value: u8) -> Self {
+    fn from_value(value: ValueType) -> Self {
         Self(T::one() << value)
     }
 
     #[inline]
-    fn full(num_values: u8) -> Self {
-        Self(if num_values == (Self::BITS as u8) {
+    fn full(num_values: ValueType) -> Self {
+        Self(if num_values == (Self::BITS as ValueType) {
             -T::one()
         } else {
             !(-T::one() << num_values)
@@ -101,11 +103,11 @@ where
     }
 
     #[inline]
-    fn min(&self) -> Option<u8> {
+    fn min(&self) -> Option<ValueType> {
         if self.is_empty() {
             None
         } else {
-            Some(self.0.trailing_zeros() as u8)
+            Some(self.0.trailing_zeros() as ValueType)
         }
     }
 
@@ -146,10 +148,10 @@ impl<T: Copy> Clone for IntBitSet<T> {
     }
 }
 
-impl<T> FromIterator<u8> for IntBitSet<T>
+impl<T> FromIterator<ValueType> for IntBitSet<T>
 where
     T: num::PrimInt
-        + ops::Shl<u8, Output = T>
+        + ops::Shl<ValueType, Output = T>
         + ops::Neg<Output = T>
         + ops::BitAndAssign
         + ops::BitAnd<Output = T>
@@ -157,7 +159,7 @@ where
         + ops::BitOr<Output = T>
         + num::traits::WrappingSub,
 {
-    fn from_iter<I: IntoIterator<Item = u8>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = ValueType>>(iter: I) -> Self {
         iter.into_iter()
             .map(Self::from_value)
             .fold(Self::empty(), |a, b| a.union(&b))
@@ -168,20 +170,23 @@ pub struct RecValueSet<T>(T, T);
 
 impl<T: ValueSet> ValueSet for RecValueSet<T> {
     #[inline]
-    fn from_value(value: u8) -> Self {
-        if value < (T::BITS as u8) {
+    fn from_value(value: ValueType) -> Self {
+        if value < (T::BITS as ValueType) {
             Self(T::empty(), T::from_value(value))
         } else {
-            Self(T::from_value(value - T::BITS as u8), T::empty())
+            Self(T::from_value(value - T::BITS as ValueType), T::empty())
         }
     }
 
     #[inline]
-    fn full(num_values: u8) -> Self {
-        if num_values < (T::BITS as u8) {
+    fn full(num_values: ValueType) -> Self {
+        if num_values < (T::BITS as ValueType) {
             Self(T::empty(), T::full(num_values))
         } else {
-            Self(T::full(num_values - T::BITS as u8), T::full(T::BITS as u8))
+            Self(
+                T::full(num_values - T::BITS as ValueType),
+                T::full(T::BITS as ValueType),
+            )
         }
     }
 
@@ -206,10 +211,10 @@ impl<T: ValueSet> ValueSet for RecValueSet<T> {
     }
 
     #[inline]
-    fn min(&self) -> Option<u8> {
+    fn min(&self) -> Option<ValueType> {
         self.1
             .min()
-            .or_else(|| self.0.min().map(|v| v + T::BITS as u8))
+            .or_else(|| self.0.min().map(|v| v + T::BITS as ValueType))
     }
 
     #[inline]
@@ -251,11 +256,11 @@ impl<T: Copy> Clone for RecValueSet<T> {
     }
 }
 
-impl<T> FromIterator<u8> for RecValueSet<T>
+impl<T> FromIterator<ValueType> for RecValueSet<T>
 where
     T: ValueSet,
 {
-    fn from_iter<I: IntoIterator<Item = u8>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = ValueType>>(iter: I) -> Self {
         iter.into_iter()
             .map(Self::from_value)
             .fold(Self::empty(), |a, b| a.union(&b))
