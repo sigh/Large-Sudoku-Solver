@@ -251,7 +251,7 @@ impl<VS: ValueSet> AllDifferentEnforcer<VS> {
         }
 
         // If we assigned all the values we can bail early.
-        if assigned_values.equals(&ValueSet::full(num_cells as ValueType)) {
+        if assigned_values == ValueSet::full(num_cells as ValueType) {
             return Ok(());
         }
 

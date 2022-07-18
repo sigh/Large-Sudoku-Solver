@@ -69,7 +69,7 @@ impl<VS: ValueSet> HouseHandler<VS> {
             num_fixed += (!v.has_multiple()) as usize;
         }
 
-        if !all_values.equals(&self.all_values) {
+        if all_values != self.all_values {
             return Err(Contradition);
         }
         if num_fixed == self.num_values {
@@ -124,7 +124,7 @@ impl SameValueHandler {
             .map(|&c| grid[c])
             .fold(VS::empty(), |a, b| a.union(&b));
 
-        if values0.equals(&values1) {
+        if values0 == values1 {
             return Ok(());
         }
 
@@ -137,10 +137,10 @@ impl SameValueHandler {
         }
 
         // Enforce the constrained value set.
-        if !values0.equals(&values) {
+        if values0 != values {
             Self::remove_extra_values(grid, &values, &self.cells0, cell_accumulator)?
         }
-        if !values1.equals(&values) {
+        if values1 != values {
             Self::remove_extra_values(grid, &values, &self.cells1, cell_accumulator)?
         }
 
@@ -158,7 +158,7 @@ impl SameValueHandler {
             if v.is_empty() {
                 return Err(Contradition);
             }
-            if !v.equals(&grid[c0]) {
+            if v != grid[c0] {
                 grid[c0] = v;
                 cell_accumulator.add(c0);
             }

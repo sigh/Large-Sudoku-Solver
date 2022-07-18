@@ -5,7 +5,7 @@ use std::{mem, ops};
 
 use crate::types::ValueType;
 
-pub trait ValueSet: Copy {
+pub trait ValueSet: Copy + Eq {
     const BITS: ValueType = (mem::size_of::<Self>() as ValueType) * (u8::BITS as ValueType);
 
     fn from_value(value: ValueType) -> Self;
@@ -44,8 +44,6 @@ pub trait ValueSet: Copy {
     fn union(&self, other: &Self) -> Self;
 
     fn without(&self, other: &Self) -> Self;
-
-    fn equals(&self, other: &Self) -> bool;
 
     #[inline]
     fn pop(&mut self) -> Option<ValueType> {
@@ -135,10 +133,6 @@ where
     fn without(&self, other: &Self) -> Self {
         Self(self.0 & !other.0)
     }
-
-    fn equals(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
 }
 
 impl<T: Copy> Copy for IntBitSet<T> {}
@@ -147,6 +141,13 @@ impl<T: Copy> Clone for IntBitSet<T> {
         *self
     }
 }
+
+impl<T: PartialEq> PartialEq for IntBitSet<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+impl<T: Eq> Eq for IntBitSet<T> {}
 
 impl<T> FromIterator<ValueType> for IntBitSet<T>
 where
@@ -243,10 +244,6 @@ impl<T: ValueSet> ValueSet for RecValueSet<T> {
     fn without(&self, other: &Self) -> Self {
         Self(self.0.without(&other.0), self.1.without(&other.1))
     }
-
-    fn equals(&self, other: &Self) -> bool {
-        self.0.equals(&other.0) && self.1.equals(&other.1)
-    }
 }
 
 impl<T: Copy> Copy for RecValueSet<T> {}
@@ -255,6 +252,13 @@ impl<T: Copy> Clone for RecValueSet<T> {
         *self
     }
 }
+
+impl<T: PartialEq> PartialEq for RecValueSet<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0 && self.1 == other.1
+    }
+}
+impl<T: Eq> Eq for RecValueSet<T> {}
 
 impl<T> FromIterator<ValueType> for RecValueSet<T>
 where
