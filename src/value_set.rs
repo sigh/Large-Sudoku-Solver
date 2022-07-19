@@ -1,11 +1,11 @@
 extern crate derive_more;
 extern crate num;
 
-use std::{mem, ops};
+use std::{fmt, mem, ops};
 
 use crate::types::ValueType;
 
-pub trait ValueSet: Copy + Eq {
+pub trait ValueSet: Copy + Eq + fmt::Debug {
     const BITS: ValueType = (mem::size_of::<Self>() as ValueType) * (u8::BITS as ValueType);
 
     fn from_value(value: ValueType) -> Self;
@@ -50,6 +50,17 @@ pub trait ValueSet: Copy + Eq {
         let value = self.min()?;
         self.remove_set(&Self::from_value(value));
         Some(value)
+    }
+
+    fn values(&self) -> Vec<ValueType> {
+        let mut values = Vec::new();
+
+        let mut copy = *self;
+        while let Some(value) = copy.pop() {
+            values.push(value);
+        }
+
+        values
     }
 }
 
@@ -167,6 +178,22 @@ where
     }
 }
 
+impl<T> fmt::Debug for IntBitSet<T>
+where
+    T: num::PrimInt
+        + ops::Shl<ValueType, Output = T>
+        + ops::Neg<Output = T>
+        + ops::BitAndAssign
+        + ops::BitAnd<Output = T>
+        + ops::BitOrAssign
+        + ops::BitOr<Output = T>
+        + num::traits::WrappingSub,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.values())
+    }
+}
+
 pub struct RecValueSet<T>(T, T);
 
 impl<T: ValueSet> ValueSet for RecValueSet<T> {
@@ -268,5 +295,11 @@ where
         iter.into_iter()
             .map(Self::from_value)
             .fold(Self::empty(), |a, b| a.union(&b))
+    }
+}
+
+impl<T: ValueSet> fmt::Debug for RecValueSet<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.values())
     }
 }
