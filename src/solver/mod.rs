@@ -3,8 +3,7 @@ mod cell_accumulator;
 mod handlers;
 mod runner;
 
-use crate::types::CellValue;
-use crate::types::Constraint;
+use crate::types::{CellValue, Constraint, FixedValues};
 use crate::value_set::{IntBitSet, RecValueSet};
 
 use runner::Runner;
@@ -13,6 +12,7 @@ pub const VALID_NUM_VALUE_RANGE: std::ops::RangeInclusive<u32> = 2..=512;
 
 pub type Solution = Vec<CellValue>;
 pub type ProgressCallback = dyn FnMut(&Counters);
+pub type MinimizerProgressCallback = dyn FnMut(&MinimizerCounters);
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Counters {
@@ -25,10 +25,20 @@ pub struct Counters {
     pub progress_ratio: f64,
 }
 
+#[derive(Copy, Clone, Debug, Default)]
+pub struct MinimizerCounters {
+    pub cells_tried: u64,
+    pub cells_removed: u64,
+}
+
+pub trait SolutionIter: Iterator<Item = Solution> {
+    fn reset_fixed_values(&mut self, fixed_values: &FixedValues);
+}
+
 pub fn solution_iter(
     constraint: &Constraint,
     progress_callback: Option<Box<ProgressCallback>>,
-) -> Box<dyn Iterator<Item = Solution>> {
+) -> Box<dyn SolutionIter> {
     const LOG_UPDATE_FREQUENCY: u64 = 10;
     let frequency_mask = match &progress_callback {
         Some(_) => (1 << LOG_UPDATE_FREQUENCY) - 1,
@@ -56,5 +66,66 @@ pub fn solution_iter(
             "Grid too large. num_values: {}",
             constraint.shape.num_values
         ),
+    }
+}
+
+pub fn minimize(
+    constraint: &Constraint,
+    progress_callback: Option<Box<MinimizerProgressCallback>>,
+) -> Box<dyn Iterator<Item = FixedValues>> {
+    Box::new(Minimizer {
+        runner: solution_iter(constraint, None),
+        remaining_values: constraint.fixed_values.clone(),
+        required_values: Vec::new(),
+        progress_callback,
+        counters: MinimizerCounters::default(),
+    })
+}
+
+struct Minimizer {
+    runner: Box<dyn SolutionIter>,
+    remaining_values: FixedValues,
+    required_values: FixedValues,
+    progress_callback: Option<Box<MinimizerProgressCallback>>,
+    counters: MinimizerCounters,
+}
+
+impl Iterator for Minimizer {
+    type Item = FixedValues;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let fixed_values = loop {
+            maybe_call_callback(&mut self.progress_callback, &self.counters);
+
+            let item = self.remaining_values.pop()?;
+            let fixed_values =
+                [self.remaining_values.clone(), self.required_values.clone()].concat();
+
+            self.runner.reset_fixed_values(&fixed_values);
+
+            self.counters.cells_tried += 1;
+
+            if self.runner.next().is_none() {
+                // No solutions - keep item removed.
+                self.counters.cells_removed += 1;
+                continue;
+            } else if self.runner.next().is_none() {
+                // One solution, return it!
+                self.counters.cells_removed += 1;
+                break fixed_values;
+            } else {
+                // Multiple solutions - this was required.
+                self.required_values.push(item);
+            }
+        };
+
+        maybe_call_callback(&mut self.progress_callback, &self.counters);
+        Some(fixed_values)
+    }
+}
+
+fn maybe_call_callback<A, F: FnMut(A)>(f: &mut Option<F>, arg: A) {
+    if let Some(f) = f {
+        (f)(arg);
     }
 }

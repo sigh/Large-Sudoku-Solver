@@ -1,19 +1,42 @@
-use crate::{solver, types};
+use crate::solver;
+use crate::types;
 
 pub fn solution_as_grid(constraint: &types::Constraint, solution: &solver::Solution) -> String {
+    render_grid(
+        constraint,
+        &solution.iter().map(|&v| Some(v)).collect::<Vec<_>>(),
+    )
+}
+
+pub fn fixed_values_as_grid(
+    constraint: &types::Constraint,
+    fixed_values: &types::FixedValues,
+) -> String {
+    let shape = &constraint.shape;
+    let mut grid = vec![None; shape.num_cells];
+    for (cell, value) in fixed_values {
+        grid[*cell] = Some(*value);
+    }
+    render_grid(constraint, &grid)
+}
+
+fn render_grid(constraint: &types::Constraint, grid: &[Option<types::CellValue>]) -> String {
     let mut output = String::new();
 
     let shape = &constraint.shape;
-    assert_eq!(shape.num_cells, solution.len());
+    assert_eq!(shape.num_cells, grid.len());
 
     let pad_size = shape.num_values.to_string().len() + 1;
 
     for r in 0..shape.side_len {
         for c in 0..shape.side_len {
             let index = shape.make_cell_index(r, c);
-            let value = solution[index].to_string();
-            (0..pad_size - value.len()).for_each(|_| output.push(' '));
-            output.push_str(&value);
+            let display = match grid[index] {
+                None => ".".to_string(),
+                Some(v) => v.to_string(),
+            };
+            (0..pad_size - display.len()).for_each(|_| output.push(' '));
+            output.push_str(&display);
         }
         output.push('\n');
     }

@@ -1,8 +1,9 @@
-use crate::types::{CellIndex, CellValue, Constraint, ValueType};
+use crate::types::{CellIndex, CellValue, Constraint, FixedValues, ValueType};
 use crate::value_set::ValueSet;
 
 use super::cell_accumulator::CellAccumulator;
-use super::handlers;
+use super::maybe_call_callback;
+use super::{handlers, SolutionIter};
 use super::{Counters, ProgressCallback, Solution};
 
 pub struct Contradition;
@@ -16,10 +17,11 @@ pub struct ProgressConfig {
 }
 
 pub struct Runner<VS: ValueSet> {
-    num_cells: usize,
+    started: bool,
     cell_order: Vec<CellIndex>,
     rec_stack: Vec<usize>,
     grid_stack: Vec<Grid<VS>>,
+    full_cell: VS,
     handler_set: handlers::HandlerSet<VS>,
     cell_accumulator: CellAccumulator,
     backtrack_triggers: Vec<u32>,
@@ -34,9 +36,13 @@ impl<VS: ValueSet> Iterator for Runner<VS> {
     fn next(&mut self) -> Option<Self::Item> {
         let grid = self.run()?;
 
-        let solution = grid
-            .iter()
-            .map(|vs| CellValue::from_index(vs.value().unwrap() as ValueType));
+        let solution = grid.iter().map(|vs| {
+            CellValue::from_index(
+                vs.value()
+                    .unwrap_or_else(|| panic!("Bad ValueSet in solution: {:?}", vs))
+                    as ValueType,
+            )
+        });
 
         Some(solution.collect())
     }
@@ -50,36 +56,36 @@ impl<VS: ValueSet> Runner<VS> {
         let handler_set = handlers::make_handlers(constraint);
         let cell_accumulator = CellAccumulator::new(num_cells, &handler_set.handlers);
 
-        let empty_grid = vec![VS::full(constraint.shape.num_values as ValueType); num_cells];
-        let mut grids = vec![empty_grid];
-
-        for (cell, value) in &constraint.fixed_values {
-            grids[0][*cell] = VS::from_value(value.index());
-        }
-
-        Self {
-            num_cells,
+        let mut new = Self {
+            started: false,
             cell_order: (0..num_cells).collect(),
             rec_stack: Vec::with_capacity(num_cells),
-            grid_stack: grids,
+            grid_stack: vec![vec![VS::empty(); num_cells]],
+            full_cell: VS::full(constraint.shape.num_values as ValueType),
             handler_set,
             cell_accumulator,
             backtrack_triggers: vec![0; num_cells],
             progress_ratio_stack: vec![1.0; num_cells + 1],
             counters: Counters::default(),
             progress_config,
-        }
+        };
+
+        new.reset_fixed_values(&constraint.fixed_values);
+
+        new
     }
 
     fn run(&mut self) -> Option<&Grid<VS>> {
         let progress_frequency_mask = self.progress_config.frequency_mask;
         let mut new_cell_index = false;
 
-        if self.counters.values_tried == 0 {
+        if !self.started {
+            self.started = true;
+
             maybe_call_callback(&mut self.progress_config.callback, &self.counters);
 
             // Initialize by finding and running all handlers.
-            for i in 0..self.num_cells {
+            for i in 0..self.cell_order.len() {
                 self.cell_accumulator.add(i);
             }
             if handlers::enforce_constraints(
@@ -110,7 +116,7 @@ impl<VS: ValueSet> Runner<VS> {
                 cell_index = self.skip_fixed_cells(grid_index, cell_index);
 
                 // We've reached the end, so output a solution!
-                if cell_index == self.num_cells {
+                if cell_index == self.cell_order.len() {
                     self.counters.solutions += 1;
                     self.counters.progress_ratio += self.progress_ratio_stack[grid_index];
                     maybe_call_callback(&mut self.progress_config.callback, &self.counters);
@@ -253,8 +259,17 @@ impl<VS: ValueSet> Runner<VS> {
     }
 }
 
-fn maybe_call_callback<A, F: FnMut(A)>(f: &mut Option<F>, arg: A) {
-    if let Some(f) = f {
-        (f)(arg);
+impl<VS: ValueSet> super::SolutionIter for Runner<VS> {
+    fn reset_fixed_values(&mut self, fixed_values: &FixedValues) {
+        self.started = false;
+        self.rec_stack.clear();
+        self.grid_stack[0].fill(self.full_cell);
+        for (cell, value) in fixed_values {
+            self.grid_stack[0][*cell] = VS::from_value(value.index());
+        }
+
+        // Both of these counters are confusing when aggregated.
+        self.counters.progress_ratio = 0.0;
+        self.counters.solutions = 0;
     }
 }

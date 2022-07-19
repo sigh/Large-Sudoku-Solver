@@ -17,6 +17,7 @@ fn run_solver(constraint: &Constraint) {
         ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {wide_bar:cyan/blue} {percent}%\n{wide_msg}"),
     );
+    bar.enable_steady_tick(1000);
     bar.set_position(0);
     bar.set_message("Initializing...");
 
@@ -36,6 +37,32 @@ fn run_solver(constraint: &Constraint) {
     bar.finish();
 }
 
+fn run_minimizer(constraint: &Constraint) {
+    let bar = Rc::new(ProgressBar::new(constraint.fixed_values.len() as u64));
+    bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {wide_bar:cyan/blue} {percent}%\n{wide_msg}"),
+    );
+    bar.enable_steady_tick(1000);
+    bar.set_position(0);
+    bar.set_message("Initializing...");
+
+    let closure_bar = bar.clone();
+    let progress_callback = Box::new(move |counters: &solver::MinimizerCounters| {
+        closure_bar.set_position(counters.cells_tried);
+        closure_bar.set_message(format!("{:?}", counters));
+    });
+
+    for fixed_values in solver::minimize(constraint, Some(progress_callback)) {
+        print_above_progress_bar(&output::fixed_values_as_grid(constraint, &fixed_values));
+        // Separate solutions by a new line.
+        println!();
+    }
+
+    bar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}"));
+    bar.finish();
+}
+
 fn print_above_progress_bar(output: &str) {
     // Erase the bar (two lines).
     eprint!("\x1b[A\x1b[2K"); // Erase line above.
@@ -47,6 +74,7 @@ fn print_above_progress_bar(output: &str) {
 
     // Write another newline so that the output is not cleared by the bar.
     eprintln!();
+    eprintln!();
 }
 
 fn main_with_result(args: Args) -> Result<(), String> {
@@ -54,7 +82,11 @@ fn main_with_result(args: Args) -> Result<(), String> {
         .map_err(|e| format!("Could not read file {}: {}", args.filename, e))?;
     let constraint = parser::parse_text(&input)?;
 
-    run_solver(&constraint);
+    if args.minimize {
+        run_minimizer(&constraint);
+    } else {
+        run_solver(&constraint);
+    }
 
     Ok(())
 }
@@ -64,6 +96,9 @@ fn main_with_result(args: Args) -> Result<(), String> {
 struct Args {
     #[clap(value_parser)]
     filename: String,
+
+    #[clap(long)]
+    minimize: bool,
 }
 
 fn main() -> ExitCode {
