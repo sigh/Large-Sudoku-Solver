@@ -1,13 +1,13 @@
-use std::env;
 use std::fs;
 use std::process::ExitCode;
 use std::rc::Rc;
 
-use large_sudoku_solver::io::{output, parser};
-use large_sudoku_solver::solver;
-
+use clap::Parser;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
+
+use large_sudoku_solver::io::{output, parser};
+use large_sudoku_solver::solver;
 use large_sudoku_solver::types::Constraint;
 
 fn run_solver(constraint: &Constraint) {
@@ -49,15 +49,9 @@ fn print_above_progress_bar(output: &str) {
     eprintln!();
 }
 
-fn main_with_result() -> Result<(), String> {
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        return Err(String::from("Must specify an input filename."));
-    }
-
-    let filename = &args[1];
-    let input = fs::read_to_string(filename)
-        .map_err(|e| format!("Could not read file {}: {}", filename, e.to_string()))?;
+fn main_with_result(args: Args) -> Result<(), String> {
+    let input = fs::read_to_string(&args.filename)
+        .map_err(|e| format!("Could not read file {}: {}", args.filename, e))?;
     let constraint = parser::parse_text(&input)?;
 
     run_solver(&constraint);
@@ -65,8 +59,16 @@ fn main_with_result() -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Parser, Debug)]
+#[clap(about, long_about = None)]
+struct Args {
+    #[clap(value_parser)]
+    filename: String,
+}
+
 fn main() -> ExitCode {
-    match main_with_result() {
+    let args = Args::parse();
+    match main_with_result(args) {
         Err(e) => {
             eprintln!("Error: {}", e);
             ExitCode::FAILURE
