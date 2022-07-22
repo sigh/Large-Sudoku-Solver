@@ -78,6 +78,7 @@ impl<VS: ValueSet> Runner<VS> {
     fn run(&mut self) -> Option<&Grid<VS>> {
         let progress_frequency_mask = self.progress_config.frequency_mask;
         let mut new_cell_index = false;
+        let mut progress_delta = 1.0;
 
         if !self.started {
             self.started = true;
@@ -118,7 +119,7 @@ impl<VS: ValueSet> Runner<VS> {
                 // We've reached the end, so output a solution!
                 if cell_index == self.cell_order.len() {
                     self.counters.solutions += 1;
-                    self.counters.progress_ratio += self.progress_ratio_stack[grid_index];
+                    self.counters.progress_ratio += progress_delta;
                     maybe_call_callback(&mut self.progress_config.callback, &self.counters);
                     return Some(&self.grid_stack[grid_index]);
                 }
@@ -128,43 +129,41 @@ impl<VS: ValueSet> Runner<VS> {
 
                 // Update counters.
                 let count = self.grid_stack[grid_index][self.cell_order[cell_index]].count();
-                self.progress_ratio_stack[grid_index + 1] =
-                    self.progress_ratio_stack[grid_index] / (count as f64);
+                self.progress_ratio_stack[grid_index] = progress_delta / (count as f64);
                 self.counters.cells_searched += 1;
             }
+            progress_delta = self.progress_ratio_stack[grid_index];
 
             // Now we know that the next cell has (or had) multiple values.
             let cell = self.cell_order[cell_index];
 
-            let value = {
-                // Find the next value to try.
-                // NOTE: Do this inside a block so that grid is only borrowed
-                //       in this scope. Otherwise the borrow checker gets in the
-                //       way of us copying the grid to the next index.
-                let grid = &mut self.grid_stack[grid_index];
-                let value = match grid[cell].pop() {
-                    None => continue,
-                    Some(v) => VS::from_value(v),
-                };
+            // We are trying a new value.
+            self.counters.values_tried += 1;
 
-                // We know we want to come back to this index.
+            let grid = if self.grid_stack[grid_index][cell].has_multiple() {
+                // There are more values left, so push the current cell onto the
+                // stack and copy the grid to create a new stack frame.
+
+                let v = self.grid_stack[grid_index][cell].pop().unwrap_or_default();
+
                 self.rec_stack.push(cell_index);
 
-                self.counters.values_tried += 1;
-                self.counters.guesses += grid[cell].is_empty() as u64;
-
+                self.counters.guesses += 1;
                 if 0 == self.counters.guesses & progress_frequency_mask {
                     maybe_call_callback(&mut self.progress_config.callback, &self.counters);
                 }
 
-                value
+                self.push_grid_onto_stack(grid_index);
+                let grid = &mut self.grid_stack[grid_index + 1];
+                // Update the grid with the trial value.
+                grid[cell] = VS::from_value(v);
+
+                grid
+            } else {
+                // If there are no further values to explore in this cell, then
+                // reuse this stack frame.
+                &mut self.grid_stack[grid_index]
             };
-
-            self.push_grid_onto_stack(grid_index);
-
-            // Update the grid with the trial value.
-            let grid = &mut self.grid_stack[grid_index + 1];
-            grid[cell] = value;
 
             // Propograte constraints.
             self.cell_accumulator.add(cell);
@@ -181,7 +180,7 @@ impl<VS: ValueSet> Runner<VS> {
                 }
                 Err(Contradition) => {
                     // Backtrack.
-                    self.counters.progress_ratio += self.progress_ratio_stack[grid_index + 1];
+                    self.counters.progress_ratio += progress_delta;
                     self.record_backtrack(cell);
                 }
             }
