@@ -1,10 +1,7 @@
 use std::fs;
 use std::process::ExitCode;
-use std::rc::Rc;
 
 use clap::Parser;
-use indicatif::ProgressBar;
-use indicatif::ProgressStyle;
 
 use large_sudoku_solver::io::{output, parser};
 use large_sudoku_solver::solver;
@@ -12,69 +9,36 @@ use large_sudoku_solver::types::Constraint;
 
 fn run_solver(constraint: &Constraint) {
     const SCALE: u64 = 10000;
-    let bar = Rc::new(ProgressBar::new(SCALE));
-    bar.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {wide_bar:cyan/blue} {percent}%\n{wide_msg}"),
-    );
-    bar.enable_steady_tick(1000);
-    bar.set_position(0);
-    bar.set_message("Initializing...");
+    output::with_progress_bar(SCALE, |bar| {
+        let progress_callback = Box::new(move |counters: &solver::Counters| {
+            bar.set_position((counters.progress_ratio * (SCALE as f64)) as u64);
+            bar.set_message(output::counters(counters));
+        });
 
-    let closure_bar = bar.clone();
-    let progress_callback = Box::new(move |counters: &solver::Counters| {
-        closure_bar.set_position((counters.progress_ratio * (SCALE as f64)) as u64);
-        closure_bar.set_message(output::counters(counters));
+        for solution in solver::solution_iter(constraint, Some(progress_callback)).take(2) {
+            output::print_above_progress_bar(&output::solution_as_grid(constraint, &solution));
+            // Separate solutions by a new line.
+            println!();
+        }
     });
-
-    for solution in solver::solution_iter(constraint, Some(progress_callback)).take(2) {
-        print_above_progress_bar(&output::solution_as_grid(constraint, &solution));
-        // Separate solutions by a new line.
-        println!();
-    }
-
-    bar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}"));
-    bar.finish();
 }
 
 fn run_minimizer(constraint: &Constraint) {
-    let bar = Rc::new(ProgressBar::new(constraint.fixed_values.len() as u64));
-    bar.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {wide_bar:cyan/blue} {percent}%\n{wide_msg}"),
-    );
-    bar.enable_steady_tick(1000);
-    bar.set_position(0);
-    bar.set_message("Initializing...");
+    output::with_progress_bar(constraint.fixed_values.len() as u64, |bar| {
+        let progress_callback = Box::new(move |counters: &solver::MinimizerCounters| {
+            bar.set_position(counters.cells_tried);
+            bar.set_message(format!("{:?}", counters));
+        });
 
-    let closure_bar = bar.clone();
-    let progress_callback = Box::new(move |counters: &solver::MinimizerCounters| {
-        closure_bar.set_position(counters.cells_tried);
-        closure_bar.set_message(format!("{:?}", counters));
+        for fixed_values in solver::minimize(constraint, Some(progress_callback)) {
+            output::print_above_progress_bar(&output::fixed_values_as_grid(
+                constraint,
+                &fixed_values,
+            ));
+            // Separate solutions by a new line.
+            println!();
+        }
     });
-
-    for fixed_values in solver::minimize(constraint, Some(progress_callback)) {
-        print_above_progress_bar(&output::fixed_values_as_grid(constraint, &fixed_values));
-        // Separate solutions by a new line.
-        println!();
-    }
-
-    bar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}"));
-    bar.finish();
-}
-
-fn print_above_progress_bar(output: &str) {
-    // Erase the bar (two lines).
-    eprint!("\x1b[A\x1b[2K"); // Erase line above.
-    eprint!("\x1b[A\x1b[2K"); // Erase line above.
-    eprint!("\r"); // Bring cursor to start.
-
-    // Write the output.
-    println!("{}", output);
-
-    // Write another newline so that the output is not cleared by the bar.
-    eprintln!();
-    eprintln!();
 }
 
 fn main_with_result(args: Args) -> Result<(), String> {

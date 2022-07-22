@@ -1,5 +1,10 @@
+use std::rc::Rc;
+
 use crate::solver;
 use crate::types;
+
+use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
 
 pub fn solution_as_grid(constraint: &types::Constraint, solution: &solver::Solution) -> String {
     render_grid(
@@ -60,4 +65,34 @@ pub fn counters(counters: &solver::Counters) -> String {
         "{{ solutions: {} guesses: {} values_tried: {} constraints_processed: {} progress_ratio: {} }}",
         counters.solutions, counters.guesses, counters.values_tried, counters.constraints_processed, counters.progress_ratio
     )
+}
+
+pub fn with_progress_bar<F: Fn(Rc<ProgressBar>)>(scale: u64, f: F) {
+    let bar = Rc::new(ProgressBar::new(scale));
+    bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {wide_bar:cyan/blue} {percent}%\n{wide_msg}"),
+    );
+    bar.enable_steady_tick(1000);
+    bar.set_position(0);
+    bar.set_message("Initializing...");
+
+    f(bar.clone());
+
+    bar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}"));
+    bar.finish();
+}
+
+pub fn print_above_progress_bar(output: &str) {
+    // Erase the bar (two lines).
+    eprint!("\x1b[A\x1b[2K"); // Erase line above.
+    eprint!("\x1b[A\x1b[2K"); // Erase line above.
+    eprint!("\r"); // Bring cursor to start.
+
+    // Write the output.
+    println!("{}", output);
+
+    // Write another newline so that the output is not cleared by the bar.
+    eprintln!();
+    eprintln!();
 }
