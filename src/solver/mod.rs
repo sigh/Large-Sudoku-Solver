@@ -4,7 +4,9 @@ mod handlers;
 mod runner;
 
 use crate::types::{CellValue, Constraint, FixedValues};
-use crate::value_set::{IntBitSet, RecValueSet};
+use crate::value_set::IntBitSet;
+#[cfg(not(feature = "i64_value_set"))]
+use crate::value_set::RecValueSet;
 
 use runner::Runner;
 
@@ -51,13 +53,20 @@ pub fn solution_iter(
     };
 
     match constraint.shape.num_values {
+        #[cfg(not(feature = "i64_value_set"))]
         2..=32 => Box::new(Runner::<IntBitSet<i32>>::new(constraint, progress_config)),
+        #[cfg(not(feature = "i64_value_set"))]
         33..=64 => Box::new(Runner::<IntBitSet<i64>>::new(constraint, progress_config)),
+        #[cfg(feature = "i64_value_set")]
+        2..=64 => Box::new(Runner::<IntBitSet<i64>>::new(constraint, progress_config)),
+        #[cfg(not(feature = "i64_value_set"))]
         65..=128 => Box::new(Runner::<IntBitSet<i128>>::new(constraint, progress_config)),
+        #[cfg(not(feature = "i64_value_set"))]
         129..=256 => Box::new(Runner::<RecValueSet<IntBitSet<i128>>>::new(
             constraint,
             progress_config,
         )),
+        #[cfg(not(feature = "i64_value_set"))]
         257..=512 => Box::new(Runner::<RecValueSet<RecValueSet<IntBitSet<i128>>>>::new(
             constraint,
             progress_config,

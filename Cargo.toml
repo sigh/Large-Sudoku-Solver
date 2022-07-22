@@ -27,3 +27,8 @@ criterion = "0.3"
 [[bench]]
 name = "all_different_benchmark"
 harness = false
+
+[features]
+# Only compile i64 value set.
+# Useful for making asm output easier to read.
+i64_value_set = []
