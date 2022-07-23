@@ -1,7 +1,7 @@
 use std::fs;
 use std::process::ExitCode;
 
-use clap::Parser;
+use clap::Parser as _;
 
 use large_sudoku_solver::io::{output, parser};
 use large_sudoku_solver::solver;
@@ -41,32 +41,48 @@ fn run_minimizer(constraint: &Constraint) {
     });
 }
 
-fn main_with_result(args: Args) -> Result<(), String> {
+fn main_with_result(args: CliArgs) -> Result<(), String> {
     let input = fs::read_to_string(&args.filename)
         .map_err(|e| format!("Could not read file {}: {}", args.filename, e))?;
     let constraint = parser::parse_text(&input)?;
 
-    if args.minimize {
-        run_minimizer(&constraint);
-    } else {
-        run_solver(&constraint);
+    match args.action {
+        CliAction::Solve => run_solver(&constraint),
+        CliAction::Minimize => run_minimizer(&constraint),
     }
 
     Ok(())
 }
 
-#[derive(Parser, Debug)]
-#[clap(about, long_about = None)]
-struct Args {
-    #[clap(value_parser)]
-    filename: String,
-
+#[derive(clap::Parser, Debug)]
+#[clap(about = "Solves sudoku puzzles with large grids (up to 512x512)")]
+struct CliArgs {
     #[clap(long)]
     minimize: bool,
+
+    #[clap(
+        value_enum,
+        hide_possible_values = true,
+        help = "Supported actions:
+
+solve:    Solve the input and prove uniqueness
+minimize: Attempt to remove as many set values from the puzzle as possible
+          while keeping the solution unique"
+    )]
+    action: CliAction,
+
+    #[clap(value_parser, help = "Filename to read puzzle from")]
+    filename: String,
+}
+
+#[derive(clap::ValueEnum, Debug, Clone)]
+enum CliAction {
+    Solve,
+    Minimize,
 }
 
 fn main() -> ExitCode {
-    let args = Args::parse();
+    let args = CliArgs::parse();
     match main_with_result(args) {
         Err(e) => {
             eprintln!("Error: {}", e);
