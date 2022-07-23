@@ -8,6 +8,7 @@ use crate::value_set::IntBitSet;
 #[cfg(not(feature = "i64_value_set"))]
 use crate::value_set::RecValueSet;
 
+use rand::prelude::{SliceRandom, StdRng};
 use runner::Runner;
 
 pub const VALID_NUM_VALUE_RANGE: std::ops::RangeInclusive<u32> = 2..=512;
@@ -15,15 +16,6 @@ pub const VALID_NUM_VALUE_RANGE: std::ops::RangeInclusive<u32> = 2..=512;
 pub type Solution = Vec<CellValue>;
 pub type ProgressCallback = dyn FnMut(&Counters);
 pub type MinimizerProgressCallback = dyn FnMut(&MinimizerCounters);
-
-pub trait ToFixedValues {
-    fn to_fixed_values(&self) -> FixedValues;
-}
-impl ToFixedValues for Solution {
-    fn to_fixed_values(&self) -> FixedValues {
-        self.iter().copied().enumerate().collect::<FixedValues>()
-    }
-}
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Counters {
@@ -144,5 +136,23 @@ impl Iterator for Minimizer {
 fn maybe_call_callback<A, F: FnMut(A)>(f: &mut Option<F>, arg: A) {
     if let Some(f) = f {
         (f)(arg);
+    }
+}
+
+pub trait SolutionTrait {
+    fn to_fixed_values(&self) -> FixedValues;
+    fn permute(&mut self, num_values: u16, rng: &mut StdRng);
+}
+impl SolutionTrait for Solution {
+    fn to_fixed_values(&self) -> FixedValues {
+        self.iter().copied().enumerate().collect::<FixedValues>()
+    }
+
+    fn permute(&mut self, num_values: u16, rng: &mut StdRng) {
+        let mut permutation = (0..num_values).collect::<Vec<_>>();
+        permutation.shuffle(rng);
+        for v in self {
+            *v = CellValue::from_index(permutation[v.index() as usize]);
+        }
     }
 }
