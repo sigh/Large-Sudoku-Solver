@@ -1,9 +1,8 @@
-use std::fs;
 use std::process::ExitCode;
 
 use clap::Parser as _;
 
-use large_sudoku_solver::io::{output, parser};
+use large_sudoku_solver::io::{input, output, parser};
 use large_sudoku_solver::solver;
 use large_sudoku_solver::types::Constraint;
 
@@ -42,7 +41,7 @@ fn run_minimizer(constraint: &Constraint) {
 }
 
 fn main_with_result(args: CliArgs) -> Result<(), String> {
-    let input = fs::read_to_string(&args.filename)
+    let input = input::read(&args.filename)
         .map_err(|e| format!("Could not read file {}: {}", args.filename, e))?;
     let constraint = parser::parse_text(&input)?;
 
@@ -71,7 +70,10 @@ minimize: Attempt to remove as many set values from the puzzle as possible
     )]
     action: CliAction,
 
-    #[clap(value_parser, help = "Filename to read puzzle from")]
+    #[clap(
+        value_parser,
+        help = "Filename to read puzzle from, or from stdio if '-'"
+    )]
     filename: String,
 }
 
