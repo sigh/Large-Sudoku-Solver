@@ -13,6 +13,7 @@ type Grid<V> = Vec<V>;
 
 pub struct Config {
     pub no_guesses: bool,
+    pub return_guesses: bool,
     pub progress_callback: Option<Box<ProgressCallback>>,
     pub progress_frequency_mask: u64,
 }
@@ -31,21 +32,39 @@ pub struct Runner<VS: ValueSet> {
     config: Config,
 }
 
+pub enum Item {
+    Solution(Solution),
+    Guesses(FixedValues),
+}
+
 impl<VS: ValueSet> Iterator for Runner<VS> {
-    type Item = Solution;
+    type Item = Item;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let grid = self.run()?;
+        let solution = {
+            let grid = self.run()?;
 
-        let solution = grid.iter().map(|vs| {
-            CellValue::from_index(
-                vs.value()
-                    .unwrap_or_else(|| panic!("Bad ValueSet in solution: {:?}", vs))
-                    as ValueType,
-            )
-        });
-
-        Some(solution.collect())
+            grid.iter()
+                .map(|vs| {
+                    CellValue::from_index(
+                        vs.value()
+                            .unwrap_or_else(|| panic!("Bad ValueSet in solution: {:?}", vs))
+                            as ValueType,
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        if self.config.return_guesses {
+            Some(Item::Guesses(
+                self.rec_stack
+                    .iter()
+                    .map(|i| self.cell_order[*i])
+                    .map(|c| (c, solution[c]))
+                    .collect(),
+            ))
+        } else {
+            Some(Item::Solution(solution))
+        }
     }
 }
 
@@ -81,6 +100,7 @@ impl<VS: ValueSet> Runner<VS> {
         let mut new_cell_index = false;
         let mut progress_delta = 1.0;
         let num_cells = self.cell_order.len();
+        let remember_guesses = self.config.return_guesses;
 
         if !self.started {
             self.started = true;
@@ -153,7 +173,7 @@ impl<VS: ValueSet> Runner<VS> {
             // We are trying a new value.
             self.counters.values_tried += 1;
 
-            let grid = if self.grid_stack[grid_index][cell].has_multiple() {
+            let grid = if remember_guesses || self.grid_stack[grid_index][cell].has_multiple() {
                 // There are more values left, so push the current cell onto the
                 // stack and copy the grid to create a new stack frame.
 

@@ -7,13 +7,13 @@ use rand::SeedableRng;
 
 use large_sudoku_solver::io::{input, output, parser};
 use large_sudoku_solver::solver;
-use large_sudoku_solver::solver::SolutionTrait;
 use large_sudoku_solver::types::Constraint;
 
 fn run_solver(
     constraint: &Constraint,
+    return_guesses_only: bool,
     num_solutions: usize,
-) -> Result<Vec<solver::Solution>, String> {
+) -> Result<Vec<solver::Item>, String> {
     let mut solutions = Vec::new();
 
     const SCALE: u64 = 10000;
@@ -23,10 +23,15 @@ fn run_solver(
             bar.set_message(output::counters(counters));
         });
 
-        for solution in
-            solver::solution_iter(constraint, false, Some(progress_callback)).take(num_solutions)
+        for solution in solver::solution_iter(
+            constraint,
+            false,
+            return_guesses_only,
+            Some(progress_callback),
+        )
+        .take(num_solutions)
         {
-            output::print_above_progress_bar(&output::solution_as_grid(constraint, &solution));
+            output::print_above_progress_bar(&output::solver_item_as_grid(constraint, &solution));
             // Separate solutions by a new line.
             println!();
 
@@ -63,21 +68,15 @@ fn run_minimizer(
     Ok(())
 }
 
-fn run_generator(
-    mut constraint: Constraint,
-    no_guesses: bool,
-    rng: &mut StdRng,
-) -> Result<(), String> {
-    let mut solutions = run_solver(&constraint, 1)?;
-    if solutions.is_empty() {
+fn run_generator(constraint: Constraint, _rng: &mut StdRng) -> Result<(), String> {
+    let guesses = run_solver(&constraint, true, 1)?;
+    if guesses.is_empty() {
         return Err("Input has no solution - puzzle could not be generated.".to_string());
     }
 
-    let candidate = &mut solutions[0];
-    candidate.permute(constraint.shape.num_values as u16, rng);
-    constraint.fixed_values = candidate.to_fixed_values();
+    // println!("{:?}", guesses);
 
-    run_minimizer(constraint, no_guesses, rng)
+    Ok(())
 }
 
 fn get_rng(args: &CliArgs) -> StdRng {
@@ -99,9 +98,9 @@ fn main_with_result(args: CliArgs) -> Result<(), String> {
     let mut rng = get_rng(&args);
 
     match args.action {
-        CliAction::Solve => run_solver(&constraint, 2).map(|_| ()),
+        CliAction::Solve => run_solver(&constraint, false, 2).map(|_| ()),
         CliAction::Minimize => run_minimizer(constraint, args.no_guesses, &mut rng),
-        CliAction::Generate => run_generator(constraint, args.no_guesses, &mut rng),
+        CliAction::Generate => run_generator(constraint, &mut rng),
     }
 }
 

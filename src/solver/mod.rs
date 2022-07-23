@@ -34,13 +34,16 @@ pub struct MinimizerCounters {
     pub cells_removed: u64,
 }
 
-pub trait SolutionIter: Iterator<Item = Solution> {
+pub type Item = runner::Item;
+
+pub trait SolutionIter: Iterator<Item = Item> {
     fn reset_fixed_values(&mut self, fixed_values: &FixedValues);
 }
 
 pub fn solution_iter(
     constraint: &Constraint,
     no_guesses: bool,
+    return_guesses: bool,
     progress_callback: Option<Box<ProgressCallback>>,
 ) -> Box<dyn SolutionIter> {
     const LOG_UPDATE_FREQUENCY: u64 = 10;
@@ -51,6 +54,7 @@ pub fn solution_iter(
 
     let progress_config = runner::Config {
         no_guesses,
+        return_guesses,
         progress_frequency_mask: frequency_mask,
         progress_callback,
     };
@@ -87,7 +91,7 @@ pub fn minimize(
     progress_callback: Option<Box<MinimizerProgressCallback>>,
 ) -> Box<dyn Iterator<Item = FixedValues>> {
     Box::new(Minimizer {
-        runner: solution_iter(constraint, no_guesses, None),
+        runner: solution_iter(constraint, no_guesses, false, None),
         remaining_values: constraint.fixed_values.clone(),
         required_values: Vec::new(),
         progress_callback,

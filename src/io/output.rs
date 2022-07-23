@@ -6,7 +6,14 @@ use crate::types;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 
-pub fn solution_as_grid(constraint: &types::Constraint, solution: &solver::Solution) -> String {
+pub fn solver_item_as_grid(constraint: &types::Constraint, item: &solver::Item) -> String {
+    match item {
+        solver::Item::Solution(solution) => solution_as_grid(constraint, &solution),
+        solver::Item::Guesses(fixed_values) => fixed_values_as_grid(constraint, &fixed_values),
+    }
+}
+
+fn solution_as_grid(constraint: &types::Constraint, solution: &solver::Solution) -> String {
     render_grid(
         constraint,
         &solution.iter().map(|&v| Some(v)).collect::<Vec<_>>(),
