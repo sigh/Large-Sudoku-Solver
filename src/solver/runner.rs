@@ -80,6 +80,7 @@ impl<VS: ValueSet> Runner<VS> {
         let progress_frequency_mask = self.config.progress_frequency_mask;
         let mut new_cell_index = false;
         let mut progress_delta = 1.0;
+        let num_cells = self.cell_order.len();
 
         if !self.started {
             self.started = true;
@@ -87,7 +88,7 @@ impl<VS: ValueSet> Runner<VS> {
             maybe_call_callback(&mut self.config.progress_callback, &self.counters);
 
             // Initialize by finding and running all handlers.
-            for i in 0..self.cell_order.len() {
+            for i in 0..num_cells {
                 self.cell_accumulator.add(i);
             }
             if handlers::enforce_constraints(
@@ -99,15 +100,21 @@ impl<VS: ValueSet> Runner<VS> {
             .is_ok()
             {
                 // Only start the search if we successfully enforced constraints.
+
                 self.rec_stack.push(0);
+
+                // Handle the no guesses case - the initial enforce constraints round should have found everything.
+                if self.config.no_guesses {
+                    if self.skip_fixed_cells(0, 0) != num_cells {
+                        return None;
+                    } else {
+                        self.rec_stack[0] = num_cells;
+                    }
+                }
+
                 new_cell_index = true;
             }
             maybe_call_callback(&mut self.config.progress_callback, &self.counters);
-
-            // Handle the no guesses case - the initial enforce constraints round should have found everything.
-            if self.config.no_guesses && self.skip_fixed_cells(0, 0) != self.cell_order.len() {
-                return None;
-            }
         }
 
         while let Some(mut cell_index) = self.rec_stack.pop() {
@@ -123,7 +130,7 @@ impl<VS: ValueSet> Runner<VS> {
                 cell_index = self.skip_fixed_cells(grid_index, cell_index);
 
                 // We've reached the end, so output a solution!
-                if cell_index == self.cell_order.len() {
+                if cell_index == num_cells {
                     self.counters.solutions += 1;
                     self.counters.progress_ratio += progress_delta;
                     maybe_call_callback(&mut self.config.progress_callback, &self.counters);
