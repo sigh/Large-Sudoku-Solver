@@ -60,5 +60,5 @@ pub type FixedValues = Vec<(CellIndex, CellValue)>;
 pub struct Constraint {
     pub shape: Shape,
     pub fixed_values: FixedValues,
-    pub sudoku_x: bool,
+    pub x_sudoku: bool,
 }

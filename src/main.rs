@@ -88,9 +88,14 @@ fn get_rng(args: &CliArgs) -> StdRng {
 }
 
 fn main_with_result(args: CliArgs) -> Result<(), String> {
-    let input = input::read(&args.filename)
-        .map_err(|e| format!("Could not read file {}: {}", args.filename, e))?;
-    let constraint = parser::parse_text(&input)?;
+    let input = input::load(&args.input)
+        .map_err(|e| format!("Could not read file {}: {}", args.input, e))?;
+
+    let mut constraint = parser::parse_text(&input)?;
+    if args.x_sudoku {
+        constraint.x_sudoku = true;
+    }
+
     let mut rng = get_rng(&args);
 
     match args.action {
@@ -111,24 +116,35 @@ struct CliArgs {
         hide_possible_values = true,
         help = "Supported actions:
 
-solve:    Solve the input and prove uniqueness
-minimize: Attempt to remove as many set values from the puzzle as possible
-          while keeping the solution unique
-generate: Generate a new puzzle using the input as a template"
+  solve:    Solve the input and prove uniqueness
+  minimize: Attempt to remove as many set values from the puzzle as possible
+            while keeping the solution unique
+  generate: Generate a new puzzle using the input as a template"
     )]
     action: CliAction,
 
     #[clap(
         value_parser,
-        help = "Filename to read puzzle from, or from stdio if '-'"
+        help = "One of:
+  Filename to read puzzle from
+  '-' to read from stdin
+  'NxN' size specification for empty grid"
     )]
-    filename: String,
+    input: String,
 
     #[clap(long, help = "RNG seed for generator/minimizer")]
     seed: Option<u64>,
 
     #[clap(long, help = "Don't allow guessing when generating/minimizing")]
     no_guesses: bool,
+
+    #[clap(
+        short,
+        long,
+        help = "Add x-sudoku constraints
+(This can also be specified by adding 'X-Sudoku' inside the puzzle file)"
+    )]
+    x_sudoku: bool,
 }
 
 #[derive(clap::ValueEnum, Debug, Clone)]

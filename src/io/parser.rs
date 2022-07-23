@@ -6,11 +6,33 @@ use crate::types::{CellValue, Constraint, FixedValues, Shape, ValueType};
 
 pub type ParserResult = Result<Constraint, String>;
 
+pub fn parse_shape_spec(input: &str) -> Option<Shape> {
+    lazy_static! {
+        static ref SHAPE_REGEX: Regex = Regex::new("^(\\d+)x(\\d+)$").unwrap();
+    }
+
+    SHAPE_REGEX
+        .captures(input)
+        .filter(|cap| cap[1] == cap[2])
+        .and_then(|cap| cap[1].parse::<usize>().ok())
+        .and_then(|side_len| guess_dimension(side_len * side_len).ok())
+        .map(Shape::new)
+}
+
 pub fn parse_text(input: &str) -> ParserResult {
     let mut input = String::from(input);
 
     remove_comments(&mut input);
-    let sudoku_x = extract_sodoku_x(&mut input);
+    let x_sudoku = extract_sodoku_x(&mut input);
+
+    if let Some(shape) = parse_shape_spec(&input) {
+        // If the input is a pure shape spec, then just return it.
+        return Ok(Constraint {
+            shape,
+            x_sudoku,
+            fixed_values: Vec::new(),
+        });
+    }
 
     let parse_fns: Vec<fn(&str) -> ParserResult> = vec![parse_short_text, parse_grid_layout];
 
@@ -31,7 +53,7 @@ pub fn parse_text(input: &str) -> ParserResult {
     match constraint {
         None => Err(errors.join("\n")),
         Some(mut constraint) => {
-            constraint.sudoku_x = sudoku_x;
+            constraint.x_sudoku = x_sudoku;
             Ok(constraint)
         }
     }
@@ -47,7 +69,7 @@ fn remove_comments(input: &mut String) {
 
 fn extract_sodoku_x(input: &mut String) -> bool {
     lazy_static! {
-        static ref SUDOKU_X_REGEX: Regex = Regex::new("(?i)sudoku[ -]x").unwrap();
+        static ref SUDOKU_X_REGEX: Regex = Regex::new("(?i)x[- ]sudoku|sudoku[ -]x").unwrap();
     }
 
     if !SUDOKU_X_REGEX.is_match(input) {
@@ -111,7 +133,7 @@ fn parse_short_text(input: &str) -> ParserResult {
     Ok(Constraint {
         shape: Shape::new(dim),
         fixed_values,
-        sudoku_x: false,
+        x_sudoku: false,
     })
 }
 
@@ -145,6 +167,6 @@ fn parse_grid_layout(input: &str) -> ParserResult {
     Ok(Constraint {
         shape: Shape::new(dim),
         fixed_values,
-        sudoku_x: false,
+        x_sudoku: false,
     })
 }

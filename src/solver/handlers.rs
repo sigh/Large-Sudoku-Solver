@@ -230,7 +230,7 @@ fn make_houses(constraint: &Constraint) -> Vec<Vec<CellIndex>> {
         houses.push((0..side_len).map(f).collect());
     }
 
-    if constraint.sudoku_x {
+    if constraint.x_sudoku {
         let f = |r| shape.make_cell_index(r, r);
         houses.push((0..side_len).map(f).collect());
 
