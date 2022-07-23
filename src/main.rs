@@ -2,49 +2,45 @@ use std::process::ExitCode;
 
 use clap::Parser as _;
 use rand::prelude::SliceRandom;
-use rand::rngs::StdRng;
 use rand::SeedableRng;
 
 use large_sudoku_solver::io::{input, output, parser};
 use large_sudoku_solver::solver;
 use large_sudoku_solver::types::Constraint;
+use large_sudoku_solver::types::RngType;
 
 fn run_solver(
     constraint: &Constraint,
-    return_guesses_only: bool,
+    mut config: solver::Config,
     num_solutions: usize,
-) -> Result<Vec<solver::Item>, String> {
-    let mut solutions = Vec::new();
+) -> Result<usize, String> {
+    let mut solutions_found = 0;
 
     const SCALE: u64 = 10000;
     output::with_progress_bar(SCALE, |bar| {
-        let config = solver::Config {
-            return_guesses: return_guesses_only,
-            progress_callback: Some(Box::new(move |counters: &solver::Counters| {
-                bar.set_position((counters.progress_ratio * (SCALE as f64)) as u64);
-                bar.set_message(output::counters(counters));
-            })),
-            ..solver::Config::default()
-        };
+        config.progress_callback = Some(Box::new(move |counters: &solver::Counters| {
+            bar.set_position((counters.progress_ratio * (SCALE as f64)) as u64);
+            bar.set_message(output::counters(counters));
+        }));
 
         for solution in solver::solution_iter(constraint, config).take(num_solutions) {
             output::print_above_progress_bar(&output::solver_item_as_grid(constraint, &solution));
             // Separate solutions by a new line.
             println!();
 
-            solutions.push(solution);
+            solutions_found += 1;
         }
     });
 
-    Ok(solutions)
+    Ok(solutions_found)
 }
 
 fn run_minimizer(
     mut constraint: Constraint,
     no_guesses: bool,
-    rng: &mut StdRng,
+    mut rng: RngType,
 ) -> Result<(), String> {
-    constraint.fixed_values.shuffle(rng);
+    constraint.fixed_values.shuffle(&mut rng);
 
     output::with_progress_bar(constraint.fixed_values.len() as u64, |bar| {
         let progress_callback = Box::new(move |counters: &solver::MinimizerCounters| {
@@ -70,21 +66,23 @@ fn run_minimizer(
     Ok(())
 }
 
-fn run_generator(constraint: Constraint, _rng: &mut StdRng) -> Result<(), String> {
-    let guesses = run_solver(&constraint, true, 1)?;
-    if guesses.is_empty() {
+fn run_generator(constraint: Constraint, rng: RngType) -> Result<(), String> {
+    let config = solver::Config {
+        return_guesses: true,
+        ..solver::Config::default()
+    };
+    let num_results = run_solver(&constraint, config, 1)?;
+    if num_results == 0 {
         return Err("Input has no solution - puzzle could not be generated.".to_string());
     }
-
-    // println!("{:?}", guesses);
 
     Ok(())
 }
 
-fn get_rng(args: &CliArgs) -> StdRng {
+fn get_rng(args: &CliArgs) -> RngType {
     match args.seed {
-        Some(seed) => StdRng::seed_from_u64(seed),
-        None => StdRng::from_entropy(),
+        Some(seed) => RngType::seed_from_u64(seed),
+        None => RngType::from_entropy(),
     }
 }
 
@@ -97,12 +95,12 @@ fn main_with_result(args: CliArgs) -> Result<(), String> {
         constraint.x_sudoku = true;
     }
 
-    let mut rng = get_rng(&args);
+    let rng = get_rng(&args);
 
     match args.action {
-        CliAction::Solve => run_solver(&constraint, false, 2).map(|_| ()),
-        CliAction::Minimize => run_minimizer(constraint, args.no_guesses, &mut rng),
-        CliAction::Generate => run_generator(constraint, &mut rng),
+        CliAction::Solve => run_solver(&constraint, solver::Config::default(), 2).map(|_| ()),
+        CliAction::Minimize => run_minimizer(constraint, args.no_guesses, rng),
+        CliAction::Generate => run_generator(constraint, rng),
     }
 }
 

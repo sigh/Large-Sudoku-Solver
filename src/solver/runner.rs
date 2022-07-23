@@ -1,5 +1,6 @@
 use crate::types::{CellIndex, CellValue, Constraint, FixedValues, ValueType};
 use crate::value_set::ValueSet;
+use rand::prelude::SliceRandom;
 
 use super::cell_accumulator::CellAccumulator;
 use super::maybe_call_callback;
@@ -62,16 +63,21 @@ impl<VS: ValueSet> Iterator for Runner<VS> {
 }
 
 impl<VS: ValueSet> Runner<VS> {
-    pub fn new(constraint: &Constraint, config: Config) -> Self {
+    pub fn new(constraint: &Constraint, mut config: Config) -> Self {
         assert!(constraint.shape.num_values <= VS::BITS as u32);
 
         let num_cells = constraint.shape.num_cells;
         let handler_set = handlers::make_handlers(constraint);
         let cell_accumulator = CellAccumulator::new(num_cells, &handler_set.handlers);
 
+        let mut cell_order = (0..num_cells).collect::<Vec<_>>();
+        if let Some(rng) = &mut config.search_randomizer {
+            cell_order.shuffle(rng);
+        };
+
         let mut new = Self {
             started: false,
-            cell_order: (0..num_cells).collect(),
+            cell_order,
             rec_stack: Vec::with_capacity(num_cells),
             grid_stack: vec![vec![VS::empty(); num_cells]],
             full_cell: VS::full(constraint.shape.num_values as ValueType),

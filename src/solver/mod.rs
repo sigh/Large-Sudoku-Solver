@@ -3,12 +3,12 @@ mod cell_accumulator;
 mod handlers;
 mod runner;
 
-use crate::types::{CellValue, Constraint, FixedValues};
+use crate::types::{CellValue, Constraint, FixedValues, RngType};
 use crate::value_set::IntBitSet;
 #[cfg(not(feature = "i64_value_set"))]
 use crate::value_set::RecValueSet;
 
-use rand::prelude::{SliceRandom, StdRng};
+use rand::prelude::SliceRandom;
 use runner::Runner;
 
 pub const VALID_NUM_VALUE_RANGE: std::ops::RangeInclusive<u32> = 2..=512;
@@ -23,6 +23,7 @@ pub struct Config {
     pub return_guesses: bool,
     pub progress_callback: Option<Box<ProgressCallback>>,
     pub progress_frequency_mask: u64,
+    pub search_randomizer: Option<RngType>,
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -145,14 +146,14 @@ fn maybe_call_callback<A, F: FnMut(A)>(f: &mut Option<F>, arg: A) {
 
 pub trait SolutionTrait {
     fn to_fixed_values(&self) -> FixedValues;
-    fn permute(&mut self, num_values: u16, rng: &mut StdRng);
+    fn permute(&mut self, num_values: u16, rng: &mut RngType);
 }
 impl SolutionTrait for Solution {
     fn to_fixed_values(&self) -> FixedValues {
         self.iter().copied().enumerate().collect::<FixedValues>()
     }
 
-    fn permute(&mut self, num_values: u16, rng: &mut StdRng) {
+    fn permute(&mut self, num_values: u16, rng: &mut RngType) {
         let mut permutation = (0..num_values).collect::<Vec<_>>();
         permutation.shuffle(rng);
         for v in self {

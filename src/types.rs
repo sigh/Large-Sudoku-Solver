@@ -2,6 +2,7 @@ use std::fmt;
 
 pub type CellIndex = usize;
 pub type ValueType = u16;
+pub type RngType = rand::rngs::StdRng;
 
 #[derive(Debug, Copy, Clone)]
 pub struct CellValue(ValueType);
