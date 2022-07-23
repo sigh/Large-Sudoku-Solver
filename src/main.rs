@@ -124,7 +124,7 @@ struct CliArgs {
   solve:    Solve the input and prove uniqueness
   minimize: Attempt to remove as many set values from the puzzle as possible
             while keeping the solution unique
-  generate: Generate a new puzzle using the input as a template
+  generate: Generate a new puzzle using the input as a template (not efficient)
   count:    Count the number of solutions without printing them"
     )]
     action: CliAction,
