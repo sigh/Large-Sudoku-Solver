@@ -56,6 +56,7 @@ impl Shape {
 
 pub type FixedValues = Vec<(CellIndex, CellValue)>;
 
+#[derive(Debug, Clone)]
 pub struct Constraint {
     pub shape: Shape,
     pub fixed_values: FixedValues,

@@ -67,7 +67,7 @@ pub fn counters(counters: &solver::Counters) -> String {
     )
 }
 
-pub fn with_progress_bar<F: Fn(Rc<ProgressBar>)>(scale: u64, f: F) {
+pub fn with_progress_bar<F: FnMut(Rc<ProgressBar>)>(scale: u64, mut f: F) {
     let bar = Rc::new(ProgressBar::new(scale));
     bar.set_style(
         ProgressStyle::default_bar()

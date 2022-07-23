@@ -16,6 +16,15 @@ pub type Solution = Vec<CellValue>;
 pub type ProgressCallback = dyn FnMut(&Counters);
 pub type MinimizerProgressCallback = dyn FnMut(&MinimizerCounters);
 
+pub trait ToFixedValues {
+    fn to_fixed_values(&self) -> FixedValues;
+}
+impl ToFixedValues for Solution {
+    fn to_fixed_values(&self) -> FixedValues {
+        self.iter().copied().enumerate().collect::<FixedValues>()
+    }
+}
+
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Counters {
     pub solutions: u64,
