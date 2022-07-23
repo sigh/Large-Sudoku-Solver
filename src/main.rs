@@ -18,19 +18,16 @@ fn run_solver(
 
     const SCALE: u64 = 10000;
     output::with_progress_bar(SCALE, |bar| {
-        let progress_callback = Box::new(move |counters: &solver::Counters| {
-            bar.set_position((counters.progress_ratio * (SCALE as f64)) as u64);
-            bar.set_message(output::counters(counters));
-        });
+        let config = solver::Config {
+            return_guesses: return_guesses_only,
+            progress_callback: Some(Box::new(move |counters: &solver::Counters| {
+                bar.set_position((counters.progress_ratio * (SCALE as f64)) as u64);
+                bar.set_message(output::counters(counters));
+            })),
+            ..solver::Config::default()
+        };
 
-        for solution in solver::solution_iter(
-            constraint,
-            false,
-            return_guesses_only,
-            Some(progress_callback),
-        )
-        .take(num_solutions)
-        {
+        for solution in solver::solution_iter(constraint, config).take(num_solutions) {
             output::print_above_progress_bar(&output::solver_item_as_grid(constraint, &solution));
             // Separate solutions by a new line.
             println!();
@@ -55,7 +52,12 @@ fn run_minimizer(
             bar.set_message(format!("{:?}", counters));
         });
 
-        for fixed_values in solver::minimize(&constraint, no_guesses, Some(progress_callback)) {
+        let config = solver::Config {
+            no_guesses,
+            ..solver::Config::default()
+        };
+
+        for fixed_values in solver::minimize(&constraint, config, Some(progress_callback)) {
             output::print_above_progress_bar(&output::fixed_values_as_grid(
                 &constraint,
                 &fixed_values,

@@ -17,6 +17,14 @@ pub type Solution = Vec<CellValue>;
 pub type ProgressCallback = dyn FnMut(&Counters);
 pub type MinimizerProgressCallback = dyn FnMut(&MinimizerCounters);
 
+#[derive(Default)]
+pub struct Config {
+    pub no_guesses: bool,
+    pub return_guesses: bool,
+    pub progress_callback: Option<Box<ProgressCallback>>,
+    pub progress_frequency_mask: u64,
+}
+
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Counters {
     pub solutions: u64,
@@ -40,43 +48,31 @@ pub trait SolutionIter: Iterator<Item = Item> {
     fn reset_fixed_values(&mut self, fixed_values: &FixedValues);
 }
 
-pub fn solution_iter(
-    constraint: &Constraint,
-    no_guesses: bool,
-    return_guesses: bool,
-    progress_callback: Option<Box<ProgressCallback>>,
-) -> Box<dyn SolutionIter> {
+pub fn solution_iter(constraint: &Constraint, mut config: Config) -> Box<dyn SolutionIter> {
     const LOG_UPDATE_FREQUENCY: u64 = 10;
-    let frequency_mask = match &progress_callback {
+    let frequency_mask = match &config.progress_callback {
         Some(_) => (1 << LOG_UPDATE_FREQUENCY) - 1,
         None => u64::MAX,
     };
 
-    let progress_config = runner::Config {
-        no_guesses,
-        return_guesses,
-        progress_frequency_mask: frequency_mask,
-        progress_callback,
-    };
+    config.progress_frequency_mask = frequency_mask;
 
     match constraint.shape.num_values {
         #[cfg(not(feature = "i64_value_set"))]
-        2..=32 => Box::new(Runner::<IntBitSet<i32>>::new(constraint, progress_config)),
+        2..=32 => Box::new(Runner::<IntBitSet<i32>>::new(constraint, config)),
         #[cfg(not(feature = "i64_value_set"))]
-        33..=64 => Box::new(Runner::<IntBitSet<i64>>::new(constraint, progress_config)),
+        33..=64 => Box::new(Runner::<IntBitSet<i64>>::new(constraint, config)),
         #[cfg(feature = "i64_value_set")]
-        2..=64 => Box::new(Runner::<IntBitSet<i64>>::new(constraint, progress_config)),
+        2..=64 => Box::new(Runner::<IntBitSet<i64>>::new(constraint, config)),
         #[cfg(not(feature = "i64_value_set"))]
-        65..=128 => Box::new(Runner::<IntBitSet<i128>>::new(constraint, progress_config)),
+        65..=128 => Box::new(Runner::<IntBitSet<i128>>::new(constraint, config)),
         #[cfg(not(feature = "i64_value_set"))]
         129..=256 => Box::new(Runner::<RecValueSet<IntBitSet<i128>>>::new(
-            constraint,
-            progress_config,
+            constraint, config,
         )),
         #[cfg(not(feature = "i64_value_set"))]
         257..=512 => Box::new(Runner::<RecValueSet<RecValueSet<IntBitSet<i128>>>>::new(
-            constraint,
-            progress_config,
+            constraint, config,
         )),
         _ => panic!(
             "Grid too large. num_values: {}",
@@ -87,11 +83,11 @@ pub fn solution_iter(
 
 pub fn minimize(
     constraint: &Constraint,
-    no_guesses: bool,
+    config: Config,
     progress_callback: Option<Box<MinimizerProgressCallback>>,
 ) -> Box<dyn Iterator<Item = FixedValues>> {
     Box::new(Minimizer {
-        runner: solution_iter(constraint, no_guesses, false, None),
+        runner: solution_iter(constraint, config),
         remaining_values: constraint.fixed_values.clone(),
         required_values: Vec::new(),
         progress_callback,

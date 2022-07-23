@@ -4,19 +4,12 @@ use crate::value_set::ValueSet;
 use super::cell_accumulator::CellAccumulator;
 use super::maybe_call_callback;
 use super::{handlers, SolutionIter};
-use super::{Counters, ProgressCallback, Solution};
+use super::{Config, Counters, Solution};
 
 pub struct Contradition;
 pub type Result = std::result::Result<(), Contradition>;
 
 type Grid<V> = Vec<V>;
-
-pub struct Config {
-    pub no_guesses: bool,
-    pub return_guesses: bool,
-    pub progress_callback: Option<Box<ProgressCallback>>,
-    pub progress_frequency_mask: u64,
-}
 
 pub struct Runner<VS: ValueSet> {
     started: bool,
@@ -69,7 +62,7 @@ impl<VS: ValueSet> Iterator for Runner<VS> {
 }
 
 impl<VS: ValueSet> Runner<VS> {
-    pub fn new(constraint: &Constraint, progress_config: Config) -> Self {
+    pub fn new(constraint: &Constraint, config: Config) -> Self {
         assert!(constraint.shape.num_values <= VS::BITS as u32);
 
         let num_cells = constraint.shape.num_cells;
@@ -87,7 +80,7 @@ impl<VS: ValueSet> Runner<VS> {
             backtrack_triggers: vec![0; num_cells],
             progress_ratio_stack: vec![1.0; num_cells + 1],
             counters: Counters::default(),
-            config: progress_config,
+            config,
         };
 
         new.reset_fixed_values(&constraint.fixed_values);

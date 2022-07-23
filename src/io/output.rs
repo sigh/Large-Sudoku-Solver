@@ -8,8 +8,8 @@ use indicatif::ProgressStyle;
 
 pub fn solver_item_as_grid(constraint: &types::Constraint, item: &solver::Item) -> String {
     match item {
-        solver::Item::Solution(solution) => solution_as_grid(constraint, &solution),
-        solver::Item::Guesses(fixed_values) => fixed_values_as_grid(constraint, &fixed_values),
+        solver::Item::Solution(solution) => solution_as_grid(constraint, solution),
+        solver::Item::Guesses(fixed_values) => fixed_values_as_grid(constraint, fixed_values),
     }
 }
 
