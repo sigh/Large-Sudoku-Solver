@@ -137,7 +137,6 @@ impl Iterator for Minimizer {
             }
         };
 
-        maybe_call_callback(&mut self.progress_callback, &self.counters);
         Some(fixed_values)
     }
 }
