@@ -75,6 +75,15 @@ fn run_generator(constraint: Constraint, _rng: RngType) -> Result<(), String> {
     Ok(())
 }
 
+fn run_count(constraint: Constraint) -> Result<(), String> {
+    let config = solver::Config {
+        output_type: solver::OutputType::Empty,
+        ..solver::Config::default()
+    };
+
+    run_solver(&constraint, config, usize::MAX).map(|_| ())
+}
+
 fn get_rng(args: &CliArgs) -> RngType {
     match args.seed {
         Some(seed) => RngType::seed_from_u64(seed),
@@ -97,6 +106,7 @@ fn main_with_result(args: CliArgs) -> Result<(), String> {
         CliAction::Solve => run_solver(&constraint, solver::Config::default(), 2).map(|_| ()),
         CliAction::Minimize => run_minimizer(constraint, args.no_guesses, rng),
         CliAction::Generate => run_generator(constraint, rng),
+        CliAction::Count => run_count(constraint),
     }
 }
 
@@ -114,7 +124,8 @@ struct CliArgs {
   solve:    Solve the input and prove uniqueness
   minimize: Attempt to remove as many set values from the puzzle as possible
             while keeping the solution unique
-  generate: Generate a new puzzle using the input as a template"
+  generate: Generate a new puzzle using the input as a template
+  count:    Count the number of solutions without printing them"
     )]
     action: CliAction,
 
@@ -147,6 +158,7 @@ enum CliAction {
     Solve,
     Minimize,
     Generate,
+    Count,
 }
 
 fn main() -> ExitCode {
