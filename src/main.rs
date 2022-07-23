@@ -24,7 +24,7 @@ fn run_solver(
         });
 
         for solution in
-            solver::solution_iter(constraint, Some(progress_callback)).take(num_solutions)
+            solver::solution_iter(constraint, false, Some(progress_callback)).take(num_solutions)
         {
             output::print_above_progress_bar(&output::solution_as_grid(constraint, &solution));
             // Separate solutions by a new line.
@@ -37,7 +37,11 @@ fn run_solver(
     Ok(solutions)
 }
 
-fn run_minimizer(mut constraint: Constraint, rng: &mut StdRng) -> Result<(), String> {
+fn run_minimizer(
+    mut constraint: Constraint,
+    no_guesses: bool,
+    rng: &mut StdRng,
+) -> Result<(), String> {
     constraint.fixed_values.shuffle(rng);
 
     output::with_progress_bar(constraint.fixed_values.len() as u64, |bar| {
@@ -46,7 +50,7 @@ fn run_minimizer(mut constraint: Constraint, rng: &mut StdRng) -> Result<(), Str
             bar.set_message(format!("{:?}", counters));
         });
 
-        for fixed_values in solver::minimize(&constraint, Some(progress_callback)) {
+        for fixed_values in solver::minimize(&constraint, no_guesses, Some(progress_callback)) {
             output::print_above_progress_bar(&output::fixed_values_as_grid(
                 &constraint,
                 &fixed_values,
@@ -59,7 +63,11 @@ fn run_minimizer(mut constraint: Constraint, rng: &mut StdRng) -> Result<(), Str
     Ok(())
 }
 
-fn run_generator(mut constraint: Constraint, rng: &mut StdRng) -> Result<(), String> {
+fn run_generator(
+    mut constraint: Constraint,
+    no_guesses: bool,
+    rng: &mut StdRng,
+) -> Result<(), String> {
     let mut solutions = run_solver(&constraint, 1)?;
     if solutions.is_empty() {
         return Err("Input has no solution - puzzle could not be generated.".to_string());
@@ -69,7 +77,7 @@ fn run_generator(mut constraint: Constraint, rng: &mut StdRng) -> Result<(), Str
     candidate.permute(constraint.shape.num_values as u16, rng);
     constraint.fixed_values = candidate.to_fixed_values();
 
-    run_minimizer(constraint, rng)
+    run_minimizer(constraint, no_guesses, rng)
 }
 
 fn get_rng(args: &CliArgs) -> StdRng {
@@ -87,8 +95,8 @@ fn main_with_result(args: CliArgs) -> Result<(), String> {
 
     match args.action {
         CliAction::Solve => run_solver(&constraint, 2).map(|_| ()),
-        CliAction::Minimize => run_minimizer(constraint, &mut rng),
-        CliAction::Generate => run_generator(constraint, &mut rng),
+        CliAction::Minimize => run_minimizer(constraint, args.no_guesses, &mut rng),
+        CliAction::Generate => run_generator(constraint, args.no_guesses, &mut rng),
     }
 }
 
@@ -118,6 +126,9 @@ generate: Generate a new puzzle using the input as a template"
 
     #[clap(long, help = "RNG seed for generator/minimizer")]
     seed: Option<u64>,
+
+    #[clap(long, help = "Don't allow guessing when generating/minimizing")]
+    no_guesses: bool,
 }
 
 #[derive(clap::ValueEnum, Debug, Clone)]

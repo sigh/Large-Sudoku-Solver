@@ -11,9 +11,10 @@ pub type Result = std::result::Result<(), Contradition>;
 
 type Grid<V> = Vec<V>;
 
-pub struct ProgressConfig {
-    pub callback: Option<Box<ProgressCallback>>,
-    pub frequency_mask: u64,
+pub struct Config {
+    pub no_guesses: bool,
+    pub progress_callback: Option<Box<ProgressCallback>>,
+    pub progress_frequency_mask: u64,
 }
 
 pub struct Runner<VS: ValueSet> {
@@ -27,7 +28,7 @@ pub struct Runner<VS: ValueSet> {
     backtrack_triggers: Vec<u32>,
     progress_ratio_stack: Vec<f64>,
     counters: Counters,
-    progress_config: ProgressConfig,
+    config: Config,
 }
 
 impl<VS: ValueSet> Iterator for Runner<VS> {
@@ -49,7 +50,7 @@ impl<VS: ValueSet> Iterator for Runner<VS> {
 }
 
 impl<VS: ValueSet> Runner<VS> {
-    pub fn new(constraint: &Constraint, progress_config: ProgressConfig) -> Self {
+    pub fn new(constraint: &Constraint, progress_config: Config) -> Self {
         assert!(constraint.shape.num_values <= VS::BITS as u32);
 
         let num_cells = constraint.shape.num_cells;
@@ -67,7 +68,7 @@ impl<VS: ValueSet> Runner<VS> {
             backtrack_triggers: vec![0; num_cells],
             progress_ratio_stack: vec![1.0; num_cells + 1],
             counters: Counters::default(),
-            progress_config,
+            config: progress_config,
         };
 
         new.reset_fixed_values(&constraint.fixed_values);
@@ -76,14 +77,14 @@ impl<VS: ValueSet> Runner<VS> {
     }
 
     fn run(&mut self) -> Option<&Grid<VS>> {
-        let progress_frequency_mask = self.progress_config.frequency_mask;
+        let progress_frequency_mask = self.config.progress_frequency_mask;
         let mut new_cell_index = false;
         let mut progress_delta = 1.0;
 
         if !self.started {
             self.started = true;
 
-            maybe_call_callback(&mut self.progress_config.callback, &self.counters);
+            maybe_call_callback(&mut self.config.progress_callback, &self.counters);
 
             // Initialize by finding and running all handlers.
             for i in 0..self.cell_order.len() {
@@ -101,7 +102,12 @@ impl<VS: ValueSet> Runner<VS> {
                 self.rec_stack.push(0);
                 new_cell_index = true;
             }
-            maybe_call_callback(&mut self.progress_config.callback, &self.counters);
+            maybe_call_callback(&mut self.config.progress_callback, &self.counters);
+
+            // Handle the no guesses case - the initial enforce constraints round should have found everything.
+            if self.config.no_guesses && self.skip_fixed_cells(0, 0) != self.cell_order.len() {
+                return None;
+            }
         }
 
         while let Some(mut cell_index) = self.rec_stack.pop() {
@@ -120,7 +126,7 @@ impl<VS: ValueSet> Runner<VS> {
                 if cell_index == self.cell_order.len() {
                     self.counters.solutions += 1;
                     self.counters.progress_ratio += progress_delta;
-                    maybe_call_callback(&mut self.progress_config.callback, &self.counters);
+                    maybe_call_callback(&mut self.config.progress_callback, &self.counters);
                     return Some(&self.grid_stack[grid_index]);
                 }
 
@@ -150,7 +156,7 @@ impl<VS: ValueSet> Runner<VS> {
 
                 self.counters.guesses += 1;
                 if 0 == self.counters.guesses & progress_frequency_mask {
-                    maybe_call_callback(&mut self.progress_config.callback, &self.counters);
+                    maybe_call_callback(&mut self.config.progress_callback, &self.counters);
                 }
 
                 self.push_grid_onto_stack(grid_index);
@@ -187,7 +193,7 @@ impl<VS: ValueSet> Runner<VS> {
         }
 
         // Send the final set of progress counters.
-        maybe_call_callback(&mut self.progress_config.callback, &self.counters);
+        maybe_call_callback(&mut self.config.progress_callback, &self.counters);
 
         None
     }

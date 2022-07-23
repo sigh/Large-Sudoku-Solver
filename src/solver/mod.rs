@@ -40,6 +40,7 @@ pub trait SolutionIter: Iterator<Item = Solution> {
 
 pub fn solution_iter(
     constraint: &Constraint,
+    no_guesses: bool,
     progress_callback: Option<Box<ProgressCallback>>,
 ) -> Box<dyn SolutionIter> {
     const LOG_UPDATE_FREQUENCY: u64 = 10;
@@ -48,9 +49,10 @@ pub fn solution_iter(
         None => u64::MAX,
     };
 
-    let progress_config = runner::ProgressConfig {
-        frequency_mask,
-        callback: progress_callback,
+    let progress_config = runner::Config {
+        no_guesses,
+        progress_frequency_mask: frequency_mask,
+        progress_callback,
     };
 
     match constraint.shape.num_values {
@@ -81,10 +83,11 @@ pub fn solution_iter(
 
 pub fn minimize(
     constraint: &Constraint,
+    no_guesses: bool,
     progress_callback: Option<Box<MinimizerProgressCallback>>,
 ) -> Box<dyn Iterator<Item = FixedValues>> {
     Box::new(Minimizer {
-        runner: solution_iter(constraint, None),
+        runner: solution_iter(constraint, no_guesses, None),
         remaining_values: constraint.fixed_values.clone(),
         required_values: Vec::new(),
         progress_callback,
@@ -116,9 +119,10 @@ impl Iterator for Minimizer {
             self.counters.cells_tried += 1;
 
             if self.runner.next().is_none() {
-                // No solutions - keep item removed.
-                self.counters.cells_removed += 1;
-                continue;
+                // No solutions, this is usually because it aborted early due to
+                // the no_guesses requirement - so keep the value.
+                // If this puzzle was already inconsistent, then we don't care.
+                self.required_values.push(item);
             } else if self.runner.next().is_none() {
                 // One solution, return it!
                 self.counters.cells_removed += 1;
