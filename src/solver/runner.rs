@@ -5,7 +5,7 @@ use rand::prelude::SliceRandom;
 use super::cell_accumulator::CellAccumulator;
 use super::maybe_call_callback;
 use super::{handlers, SolutionIter};
-use super::{Config, Counters, Solution};
+use super::{Config, Counters, Output, OutputType};
 
 pub struct Contradition;
 pub type Result = std::result::Result<(), Contradition>;
@@ -26,18 +26,11 @@ pub struct Runner<VS: ValueSet> {
     config: Config,
 }
 
-pub enum Item {
-    Solution(Solution),
-    Guesses(FixedValues),
-}
-
 impl<VS: ValueSet> Iterator for Runner<VS> {
-    type Item = Item;
+    type Item = Output;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let solution = {
-            let grid = self.run()?;
-
+        let grid_to_solution = |grid: &Grid<VS>| {
             grid.iter()
                 .map(|vs| {
                     CellValue::from_index(
@@ -48,16 +41,21 @@ impl<VS: ValueSet> Iterator for Runner<VS> {
                 })
                 .collect::<Vec<_>>()
         };
-        if self.config.return_guesses {
-            Some(Item::Guesses(
-                self.rec_stack
-                    .iter()
-                    .map(|i| self.cell_order[*i])
-                    .map(|c| (c, solution[c]))
-                    .collect(),
-            ))
-        } else {
-            Some(Item::Solution(solution))
+
+        match self.config.output_type {
+            OutputType::Empty => self.run().map(|_| Output::Empty),
+
+            OutputType::Solution => self.run().map(grid_to_solution).map(Output::Solution),
+
+            OutputType::Guesses => self.run().map(grid_to_solution).map(|solution| {
+                Output::Guesses(
+                    self.rec_stack
+                        .iter()
+                        .map(|i| self.cell_order[*i])
+                        .map(|c| (c, solution[c]))
+                        .collect(),
+                )
+            }),
         }
     }
 }
@@ -99,7 +97,7 @@ impl<VS: ValueSet> Runner<VS> {
         let mut new_cell_index = false;
         let mut progress_delta = 1.0;
         let num_cells = self.cell_order.len();
-        let remember_guesses = self.config.return_guesses;
+        let remember_guesses = self.config.output_type == OutputType::Guesses;
 
         if !self.started {
             self.started = true;

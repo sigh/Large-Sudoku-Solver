@@ -25,8 +25,6 @@ fn run_solver(
 
         for solution in solver::solution_iter(constraint, config).take(num_solutions) {
             output::print_above_progress_bar(&output::solver_item_as_grid(constraint, &solution));
-            // Separate solutions by a new line.
-            println!();
 
             solutions_found += 1;
         }
@@ -58,17 +56,15 @@ fn run_minimizer(
                 &constraint,
                 &fixed_values,
             ));
-            // Separate solutions by a new line.
-            println!();
         }
     });
 
     Ok(())
 }
 
-fn run_generator(constraint: Constraint, rng: RngType) -> Result<(), String> {
+fn run_generator(constraint: Constraint, _rng: RngType) -> Result<(), String> {
     let config = solver::Config {
-        return_guesses: true,
+        output_type: solver::OutputType::Guesses,
         ..solver::Config::default()
     };
     let num_results = run_solver(&constraint, config, 1)?;

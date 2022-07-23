@@ -55,6 +55,7 @@ impl Shape {
     }
 }
 
+pub type Solution = Vec<CellValue>;
 pub type FixedValues = Vec<(CellIndex, CellValue)>;
 
 #[derive(Debug, Clone)]

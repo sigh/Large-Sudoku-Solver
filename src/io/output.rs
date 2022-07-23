@@ -6,14 +6,15 @@ use crate::types;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 
-pub fn solver_item_as_grid(constraint: &types::Constraint, item: &solver::Item) -> String {
+pub fn solver_item_as_grid(constraint: &types::Constraint, item: &solver::Output) -> String {
     match item {
-        solver::Item::Solution(solution) => solution_as_grid(constraint, solution),
-        solver::Item::Guesses(fixed_values) => fixed_values_as_grid(constraint, fixed_values),
+        solver::Output::Solution(solution) => solution_as_grid(constraint, solution),
+        solver::Output::Guesses(fixed_values) => fixed_values_as_grid(constraint, fixed_values),
+        solver::Output::Empty => String::new(),
     }
 }
 
-fn solution_as_grid(constraint: &types::Constraint, solution: &solver::Solution) -> String {
+fn solution_as_grid(constraint: &types::Constraint, solution: &types::Solution) -> String {
     render_grid(
         constraint,
         &solution.iter().map(|&v| Some(v)).collect::<Vec<_>>(),
@@ -56,7 +57,7 @@ fn render_grid(constraint: &types::Constraint, grid: &[Option<types::CellValue>]
     output
 }
 
-pub fn solution_compact(solution: &solver::Solution) -> String {
+pub fn solution_compact(solution: &types::Solution) -> String {
     format!(
         "[{}]",
         solution
@@ -91,6 +92,10 @@ pub fn with_progress_bar<F: FnOnce(Rc<ProgressBar>)>(scale: u64, f: F) {
 }
 
 pub fn print_above_progress_bar(output: &str) {
+    if output.is_empty() {
+        return;
+    }
+
     if atty::is(atty::Stream::Stdout) {
         // We only need to worry about the bar if stdout is going to a tty.
 
@@ -108,4 +113,7 @@ pub fn print_above_progress_bar(output: &str) {
     } else {
         println!("{}", output);
     }
+
+    // Print another line between solutions.
+    println!();
 }

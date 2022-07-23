@@ -3,7 +3,7 @@ mod cell_accumulator;
 mod handlers;
 mod runner;
 
-use crate::types::{CellValue, Constraint, FixedValues, RngType};
+use crate::types::{CellValue, Constraint, FixedValues, RngType, Solution};
 use crate::value_set::IntBitSet;
 #[cfg(not(feature = "i64_value_set"))]
 use crate::value_set::RecValueSet;
@@ -13,17 +13,16 @@ use runner::Runner;
 
 pub const VALID_NUM_VALUE_RANGE: std::ops::RangeInclusive<u32> = 2..=512;
 
-pub type Solution = Vec<CellValue>;
 pub type ProgressCallback = dyn FnMut(&Counters);
 pub type MinimizerProgressCallback = dyn FnMut(&MinimizerCounters);
 
 #[derive(Default)]
 pub struct Config {
     pub no_guesses: bool,
-    pub return_guesses: bool,
     pub progress_callback: Option<Box<ProgressCallback>>,
     pub progress_frequency_mask: u64,
     pub search_randomizer: Option<RngType>,
+    pub output_type: OutputType,
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -43,9 +42,21 @@ pub struct MinimizerCounters {
     pub cells_removed: u64,
 }
 
-pub type Item = runner::Item;
+#[derive(Default, PartialEq)]
+pub enum OutputType {
+    #[default]
+    Solution,
+    Guesses,
+    Empty,
+}
 
-pub trait SolutionIter: Iterator<Item = Item> {
+pub enum Output {
+    Solution(Solution),
+    Guesses(FixedValues),
+    Empty,
+}
+
+pub trait SolutionIter: Iterator<Item = Output> {
     fn reset_fixed_values(&mut self, fixed_values: &FixedValues);
 }
 
