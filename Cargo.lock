@@ -355,6 +355,7 @@ dependencies = [
 name = "large_sudoku_solver"
 version = "0.1.0"
 dependencies = [
+ "atty",
  "clap 3.2.12",
  "criterion",
  "derive_more",

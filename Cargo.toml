@@ -13,6 +13,7 @@ derive_more = "0.99.0"
 num = "0.4.0"
 clap = { version = "3.2.12", features = ["derive"] }
 rand = "0.8.5"
+atty = "0.2"
 
 [profile.dev]
 opt-level = 0

@@ -84,15 +84,21 @@ pub fn with_progress_bar<F: FnMut(Rc<ProgressBar>)>(scale: u64, mut f: F) {
 }
 
 pub fn print_above_progress_bar(output: &str) {
-    // Erase the bar (two lines).
-    eprint!("\x1b[A\x1b[2K"); // Erase line above.
-    eprint!("\x1b[A\x1b[2K"); // Erase line above.
-    eprint!("\r"); // Bring cursor to start.
+    if atty::is(atty::Stream::Stdout) {
+        // We only need to worry about the bar if stdout is going to a tty.
 
-    // Write the output.
-    println!("{}", output);
+        // Erase the bar (two lines).
+        eprint!("\x1b[A\x1b[2K"); // Erase line above.
+        eprint!("\x1b[A\x1b[2K"); // Erase line above.
+        eprint!("\r"); // Bring cursor to start.
 
-    // Write another newline so that the output is not cleared by the bar.
-    eprintln!();
-    eprintln!();
+        // Write the output.
+        println!("{}", output);
+
+        // Write another newline so that the output is not cleared by the bar.
+        eprintln!();
+        eprintln!();
+    } else {
+        println!("{}", output);
+    }
 }
