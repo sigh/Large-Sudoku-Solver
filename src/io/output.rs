@@ -105,15 +105,75 @@ pub fn print_above_progress_bar(output: &str) {
         eprint!("\r"); // Bring cursor to start.
 
         // Write the output.
-        println!("{}", output);
+        print!("{}", output);
 
         // Write another newline so that the output is not cleared by the bar.
         eprintln!();
         eprintln!();
     } else {
-        println!("{}", output);
+        print!("{}", output);
     }
 
     // Print another line between solutions.
     println!();
+}
+
+pub trait Writer {
+    fn write(&mut self, s: &str);
+}
+
+pub type ProgressWriter = Box<dyn Writer>;
+
+pub fn get_writer(output_last: bool) -> ProgressWriter {
+    let mut writer: ProgressWriter = Box::new(ProgressBarWriter {});
+    if output_last {
+        writer = Box::new(LastItemWriter::new(writer));
+    }
+    writer
+}
+
+struct ProgressBarWriter {}
+impl Writer for ProgressBarWriter {
+    fn write(&mut self, s: &str) {
+        print_above_progress_bar(s);
+    }
+}
+
+pub struct EmptyWriter {}
+impl Writer for EmptyWriter {
+    fn write(&mut self, _s: &str) {}
+}
+
+pub struct StdoutWriter {}
+impl Writer for StdoutWriter {
+    fn write(&mut self, s: &str) {
+        print!("{}", s);
+    }
+}
+
+struct LastItemWriter {
+    last_item: String,
+    wrapped_writer: ProgressWriter,
+}
+
+impl LastItemWriter {
+    pub fn new(wrapped_writer: ProgressWriter) -> LastItemWriter {
+        LastItemWriter {
+            wrapped_writer,
+            last_item: String::new(),
+        }
+    }
+}
+impl Writer for LastItemWriter {
+    fn write(&mut self, s: &str) {
+        if !s.chars().all(|c| c == '\n') {
+            // Only look at non-empty lines.
+            self.last_item = s.to_string();
+        }
+    }
+}
+impl Drop for LastItemWriter {
+    fn drop(&mut self) {
+        self.wrapped_writer.write(&self.last_item);
+    }
 }

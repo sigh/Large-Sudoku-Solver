@@ -1,6 +1,7 @@
 use std::process::ExitCode;
 
 use clap::Parser as _;
+use large_sudoku_solver::io::output::get_writer;
 use rand::prelude::SliceRandom;
 use rand::SeedableRng;
 
@@ -11,6 +12,7 @@ use large_sudoku_solver::types::RngType;
 
 fn run_solver(
     constraint: &Constraint,
+    mut writer: output::ProgressWriter,
     mut config: solver::Config,
     num_solutions: usize,
 ) -> Result<usize, String> {
@@ -24,10 +26,12 @@ fn run_solver(
         }));
 
         for solution in solver::solution_iter(constraint, config).take(num_solutions) {
-            output::print_above_progress_bar(&output::solver_item_as_grid(constraint, &solution));
+            writer.write(&output::solver_item_as_grid(constraint, &solution));
 
             solutions_found += 1;
         }
+
+        drop(writer);
     });
 
     Ok(solutions_found)
@@ -35,6 +39,7 @@ fn run_solver(
 
 fn run_minimizer(
     mut constraint: Constraint,
+    mut writer: output::ProgressWriter,
     no_guesses: bool,
     mut rng: RngType,
 ) -> Result<(), String> {
@@ -52,22 +57,25 @@ fn run_minimizer(
         };
 
         for fixed_values in solver::minimize(&constraint, config, Some(progress_callback)) {
-            output::print_above_progress_bar(&output::fixed_values_as_grid(
-                &constraint,
-                &fixed_values,
-            ));
+            writer.write(&output::fixed_values_as_grid(&constraint, &fixed_values));
         }
+
+        drop(writer);
     });
 
     Ok(())
 }
 
-fn run_generator(constraint: Constraint, _rng: RngType) -> Result<(), String> {
+fn run_generator(
+    constraint: Constraint,
+    writer: output::ProgressWriter,
+    _rng: RngType,
+) -> Result<(), String> {
     let config = solver::Config {
         output_type: solver::OutputType::Guesses,
         ..solver::Config::default()
     };
-    let num_results = run_solver(&constraint, config, 1)?;
+    let num_results = run_solver(&constraint, writer, config, 1)?;
     if num_results == 0 {
         return Err("Input has no solution - puzzle could not be generated.".to_string());
     }
@@ -81,7 +89,13 @@ fn run_count(constraint: Constraint) -> Result<(), String> {
         ..solver::Config::default()
     };
 
-    run_solver(&constraint, config, usize::MAX).map(|_| ())
+    run_solver(
+        &constraint,
+        Box::new(output::EmptyWriter {}),
+        config,
+        usize::MAX,
+    )
+    .map(|_| ())
 }
 
 fn get_rng(args: &CliArgs) -> RngType {
@@ -102,10 +116,14 @@ fn main_with_result(args: CliArgs) -> Result<(), String> {
 
     let rng = get_rng(&args);
 
+    let writer = get_writer(args.output_last);
+
     match args.action {
-        CliAction::Solve => run_solver(&constraint, solver::Config::default(), 2).map(|_| ()),
-        CliAction::Minimize => run_minimizer(constraint, args.no_guesses, rng),
-        CliAction::Generate => run_generator(constraint, rng),
+        CliAction::Solve => {
+            run_solver(&constraint, writer, solver::Config::default(), 2).map(|_| ())
+        }
+        CliAction::Minimize => run_minimizer(constraint, writer, args.no_guesses, rng),
+        CliAction::Generate => run_generator(constraint, writer, rng),
         CliAction::Count => run_count(constraint),
     }
 }
@@ -138,12 +156,6 @@ struct CliArgs {
     )]
     input: String,
 
-    #[clap(long, help = "RNG seed for generator/minimizer")]
-    seed: Option<u64>,
-
-    #[clap(long, help = "Don't allow guessing when generating/minimizing")]
-    no_guesses: bool,
-
     #[clap(
         short,
         long,
@@ -151,6 +163,15 @@ struct CliArgs {
 (This can also be specified by adding 'X-Sudoku' inside the puzzle file)"
     )]
     x_sudoku: bool,
+
+    #[clap(long, help = "Only output the last solution/puzzle")]
+    output_last: bool,
+
+    #[clap(long, help = "Don't allow guessing when generating/minimizing")]
+    no_guesses: bool,
+
+    #[clap(long, help = "RNG seed for generator/minimizer")]
+    seed: Option<u64>,
 }
 
 #[derive(clap::ValueEnum, Debug, Clone)]
