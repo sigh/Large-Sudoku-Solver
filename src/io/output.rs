@@ -1,10 +1,12 @@
 use std::rc::Rc;
-
-use crate::solver;
-use crate::types;
+use std::sync::Mutex;
 
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
+use lazy_static::lazy_static;
+
+use crate::solver;
+use crate::types;
 
 pub fn solver_item_as_grid(constraint: &types::Constraint, item: &solver::Output) -> String {
     match item {
@@ -144,11 +146,12 @@ impl Writer for EmptyWriter {
     fn write(&mut self, _s: &str) {}
 }
 
-pub struct StdoutWriter {}
-impl Writer for StdoutWriter {
-    fn write(&mut self, s: &str) {
-        print!("{}", s);
-    }
+lazy_static! {
+    static ref LAST_ITEM: Mutex<String> = Mutex::new(String::new());
+}
+
+pub fn set_ctrlc_handler() {
+    LastItemWriter::set_ctrlc_handler();
 }
 
 struct LastItemWriter {
@@ -163,17 +166,31 @@ impl LastItemWriter {
             last_item: String::new(),
         }
     }
+
+    pub fn set_ctrlc_handler() {
+        ctrlc::set_handler(|| {
+            // Print a new line so that we aren't on the same line as the '^C'
+            eprintln!();
+            // Write the last line.
+            print!("{}", *LAST_ITEM.lock().unwrap());
+            // Exit the process.
+            std::process::exit(1);
+        })
+        .expect("Error setting Ctrl-C handler");
+    }
 }
 impl Writer for LastItemWriter {
     fn write(&mut self, s: &str) {
         if !s.chars().all(|c| c == '\n') {
             // Only look at non-empty lines.
             self.last_item = s.to_string();
+            *LAST_ITEM.lock().unwrap() = s.to_string();
         }
     }
 }
 impl Drop for LastItemWriter {
     fn drop(&mut self) {
         self.wrapped_writer.write(&self.last_item);
+        *LAST_ITEM.lock().unwrap() = String::new();
     }
 }

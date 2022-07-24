@@ -1,7 +1,6 @@
 use std::process::ExitCode;
 
 use clap::Parser as _;
-use large_sudoku_solver::io::output::get_writer;
 use rand::prelude::SliceRandom;
 use rand::SeedableRng;
 
@@ -116,7 +115,7 @@ fn main_with_result(args: CliArgs) -> Result<(), String> {
 
     let rng = get_rng(&args);
 
-    let writer = get_writer(args.output_last);
+    let writer = output::get_writer(args.output_last);
 
     match args.action {
         CliAction::Solve => {
@@ -164,7 +163,11 @@ struct CliArgs {
     )]
     x_sudoku: bool,
 
-    #[clap(long, help = "Only output the last solution/puzzle")]
+    #[clap(
+        long,
+        help = "Only output the last solution/puzzle
+(Works even if program is aborted with ctrl-c)"
+    )]
     output_last: bool,
 
     #[clap(long, help = "Don't allow guessing when generating/minimizing")]
@@ -184,6 +187,7 @@ enum CliAction {
 
 fn main() -> ExitCode {
     let args = CliArgs::parse();
+    output::set_ctrlc_handler();
     match main_with_result(args) {
         Err(e) => {
             eprintln!("Error: {}", e);
