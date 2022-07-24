@@ -3,9 +3,8 @@ use crate::value_set::ValueSet;
 use rand::prelude::SliceRandom;
 
 use super::cell_accumulator::CellAccumulator;
-use super::maybe_call_callback;
 use super::{handlers, SolutionIter};
-use super::{Config, Counters, Output, OutputType};
+use super::{Config, Counters, Output, OutputType, ProgressCallback};
 
 pub struct Contradition;
 pub type Result = std::result::Result<(), Contradition>;
@@ -21,6 +20,7 @@ pub struct Runner<VS: ValueSet> {
     handler_set: handlers::HandlerSet<VS>,
     cell_accumulator: CellAccumulator,
     backtrack_triggers: Vec<u32>,
+    progress_metadata: ProgressMetadata,
     progress_ratio_stack: Vec<f64>,
     counters: Counters,
     config: Config,
@@ -73,6 +73,8 @@ impl<VS: ValueSet> Runner<VS> {
             cell_order.shuffle(rng);
         };
 
+        let progress_metadata = ProgressMetadata::new(&mut config.progress_callback);
+
         let mut new = Self {
             started: false,
             cell_order,
@@ -84,6 +86,7 @@ impl<VS: ValueSet> Runner<VS> {
             backtrack_triggers: vec![0; num_cells],
             progress_ratio_stack: vec![1.0; num_cells + 1],
             counters: Counters::default(),
+            progress_metadata,
             config,
         };
 
@@ -93,7 +96,6 @@ impl<VS: ValueSet> Runner<VS> {
     }
 
     fn run(&mut self) -> Option<&Grid<VS>> {
-        let progress_frequency_mask = self.config.progress_frequency_mask;
         let mut new_cell_index = false;
         let mut progress_delta = 1.0;
         let num_cells = self.cell_order.len();
@@ -102,7 +104,7 @@ impl<VS: ValueSet> Runner<VS> {
         if !self.started {
             self.started = true;
 
-            maybe_call_callback(&mut self.config.progress_callback, &self.counters);
+            self.progress_metadata.maybe_call(&self.counters);
 
             // Initialize by finding and running all handlers.
             for i in 0..num_cells {
@@ -131,7 +133,7 @@ impl<VS: ValueSet> Runner<VS> {
 
                 new_cell_index = true;
             }
-            maybe_call_callback(&mut self.config.progress_callback, &self.counters);
+            self.progress_metadata.maybe_call(&self.counters);
         }
 
         while let Some(mut cell_index) = self.rec_stack.pop() {
@@ -150,7 +152,7 @@ impl<VS: ValueSet> Runner<VS> {
                 if cell_index == num_cells {
                     self.counters.solutions += 1;
                     self.counters.progress_ratio += progress_delta;
-                    maybe_call_callback(&mut self.config.progress_callback, &self.counters);
+                    self.progress_metadata.maybe_call(&self.counters);
                     return Some(&self.grid_stack[grid_index]);
                 }
 
@@ -179,9 +181,8 @@ impl<VS: ValueSet> Runner<VS> {
                 self.rec_stack.push(cell_index);
 
                 self.counters.guesses += 1;
-                if 0 == self.counters.guesses & progress_frequency_mask {
-                    maybe_call_callback(&mut self.config.progress_callback, &self.counters);
-                }
+                self.progress_metadata
+                    .maybe_call_thottled(self.counters.constraints_processed, &self.counters);
 
                 self.push_grid_onto_stack(grid_index);
                 let grid = &mut self.grid_stack[grid_index + 1];
@@ -217,7 +218,7 @@ impl<VS: ValueSet> Runner<VS> {
         }
 
         // Send the final set of progress counters.
-        maybe_call_callback(&mut self.config.progress_callback, &self.counters);
+        self.progress_metadata.maybe_call(&self.counters);
 
         None
     }
@@ -300,5 +301,43 @@ impl<VS: ValueSet> super::SolutionIter for Runner<VS> {
         // Both of these counters are confusing when aggregated.
         self.counters.progress_ratio = 0.0;
         self.counters.solutions = 0;
+    }
+}
+
+struct ProgressMetadata {
+    callback: Option<Box<ProgressCallback>>,
+    frequency_mask: u64,
+    next_check: u64,
+}
+
+impl ProgressMetadata {
+    fn new(callback: &mut Option<Box<ProgressCallback>>) -> ProgressMetadata {
+        const LOG_UPDATE_FREQUENCY: u64 = 21;
+        const UPDATE_FREQUENCY_MASK: u64 = (1 << LOG_UPDATE_FREQUENCY) - 1;
+        match callback {
+            None => ProgressMetadata {
+                callback: None,
+                frequency_mask: u64::MAX,
+                next_check: u64::MAX,
+            },
+            Some(_) => ProgressMetadata {
+                callback: callback.take(),
+                frequency_mask: UPDATE_FREQUENCY_MASK,
+                next_check: 0,
+            },
+        }
+    }
+
+    #[inline]
+    fn maybe_call_thottled(&mut self, progress_counter: u64, payload: &Counters) {
+        if progress_counter > self.next_check {
+            self.next_check = progress_counter | self.frequency_mask;
+            self.maybe_call(payload);
+        }
+    }
+
+    #[inline]
+    fn maybe_call(&mut self, payload: &Counters) {
+        super::maybe_call_callback(&mut self.callback, payload);
     }
 }

@@ -20,7 +20,6 @@ pub type MinimizerProgressCallback = dyn FnMut(&MinimizerCounters);
 pub struct Config {
     pub no_guesses: bool,
     pub progress_callback: Option<Box<ProgressCallback>>,
-    pub progress_frequency_mask: u64,
     pub search_randomizer: Option<RngType>,
     pub output_type: OutputType,
 }
@@ -60,15 +59,7 @@ pub trait SolutionIter: Iterator<Item = Output> {
     fn reset_fixed_values(&mut self, fixed_values: &FixedValues);
 }
 
-pub fn solution_iter(constraint: &Constraint, mut config: Config) -> Box<dyn SolutionIter> {
-    const LOG_UPDATE_FREQUENCY: u64 = 10;
-    let frequency_mask = match &config.progress_callback {
-        Some(_) => (1 << LOG_UPDATE_FREQUENCY) - 1,
-        None => u64::MAX,
-    };
-
-    config.progress_frequency_mask = frequency_mask;
-
+pub fn solution_iter(constraint: &Constraint, config: Config) -> Box<dyn SolutionIter> {
     match constraint.shape.num_values {
         #[cfg(not(feature = "i64_value_set"))]
         2..=32 => Box::new(Runner::<IntBitSet<i32>>::new(constraint, config)),
