@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::ops::Deref;
 
 use crate::types::{CellIndex, Constraint, Shape, ValueType};
 use crate::value_set::ValueSet;
@@ -7,36 +7,6 @@ use super::all_different::AllDifferentEnforcer;
 use super::cell_accumulator::{CellAccumulator, CellContainer};
 use super::runner;
 use super::runner::Contradition;
-use super::Counters;
-
-pub fn enforce_constraints<VS: ValueSet>(
-    grid: &mut [VS],
-    cell_accumulator: &mut CellAccumulator,
-    handler_set: &mut HandlerSet<VS>,
-    counters: &mut Counters,
-) -> runner::Result {
-    let mut all_different_enforcer = handler_set.all_diff_enforcer.borrow_mut();
-
-    while let Some(handler_index) = cell_accumulator.pop() {
-        cell_accumulator.hold(handler_index);
-        let handler = &mut handler_set.handlers[handler_index];
-        counters.constraints_processed += 1;
-        match handler {
-            ConstraintHandler::House(h) => {
-                h.enforce_consistency(grid, cell_accumulator, &mut all_different_enforcer)
-            }
-            ConstraintHandler::SameValue(h) => h.enforce_consistency(grid, cell_accumulator),
-        }
-        .map_err(|e| {
-            cell_accumulator.clear();
-            e
-        })?;
-
-        cell_accumulator.clear_hold();
-    }
-
-    Ok(())
-}
 
 pub struct HouseHandler<VS> {
     cells: Vec<CellIndex>,
@@ -189,16 +159,38 @@ impl<VS: ValueSet> CellContainer for ConstraintHandler<VS> {
 }
 
 pub struct HandlerSet<VS: ValueSet> {
-    pub handlers: Vec<ConstraintHandler<VS>>,
-    all_diff_enforcer: RefCell<AllDifferentEnforcer<VS>>,
+    handlers: Vec<ConstraintHandler<VS>>,
+    all_diff_enforcer: AllDifferentEnforcer<VS>,
 }
 
 impl<VS: ValueSet> HandlerSet<VS> {
     fn new(shape: &Shape) -> Self {
         Self {
             handlers: Vec::new(),
-            all_diff_enforcer: RefCell::new(AllDifferentEnforcer::new(shape.num_values)),
+            all_diff_enforcer: AllDifferentEnforcer::new(shape.num_values),
         }
+    }
+
+    pub fn run_handler(
+        &mut self,
+        index: usize,
+        grid: &mut [VS],
+        cell_accumulator: &mut CellAccumulator,
+    ) -> runner::Result {
+        match &mut self.handlers[index] {
+            ConstraintHandler::House(h) => {
+                h.enforce_consistency(grid, cell_accumulator, &mut self.all_diff_enforcer)
+            }
+            ConstraintHandler::SameValue(h) => h.enforce_consistency(grid, cell_accumulator),
+        }
+    }
+}
+
+impl<VS: ValueSet> Deref for HandlerSet<VS> {
+    type Target = [ConstraintHandler<VS>];
+
+    fn deref(&self) -> &Self::Target {
+        &self.handlers
     }
 }
 

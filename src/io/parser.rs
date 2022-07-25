@@ -11,12 +11,13 @@ pub fn parse_shape_spec(input: &str) -> Option<Shape> {
         static ref SHAPE_REGEX: Regex = Regex::new("^(\\d+)x(\\d+)$").unwrap();
     }
 
-    SHAPE_REGEX
+    let side_len = SHAPE_REGEX
         .captures(input)
         .filter(|cap| cap[1] == cap[2])
-        .and_then(|cap| cap[1].parse::<usize>().ok())
-        .and_then(|side_len| guess_dimension(side_len * side_len).ok())
-        .map(Shape::new)
+        .and_then(|cap| cap[1].parse::<usize>().ok())?;
+
+    let dim = guess_dimension(side_len * side_len).ok()?;
+    Some(Shape::new(dim))
 }
 
 pub fn parse_text(input: &str) -> ParserResult {
@@ -116,17 +117,13 @@ fn parse_short_text(input: &str) -> ParserResult {
     let mut fixed_values = FixedValues::new();
 
     for (i, c) in input.chars().enumerate() {
-        match c {
-            '.' | '0' => {}
-            c if c.is_digit(radix) => {
-                fixed_values.push((
-                    i,
-                    CellValue::from_display_value(c.to_digit(radix).unwrap().try_into().unwrap()),
-                ));
-            }
-            c => {
-                return Err(format!("Unrecognized character: {}", c));
-            }
+        if c.is_digit(radix) {
+            fixed_values.push((
+                i,
+                CellValue::from_display_value(c.to_digit(radix).unwrap().try_into().unwrap()),
+            ));
+        } else if c != '.' && c != '0' {
+            return Err(format!("Unrecognized character: {}", c));
         }
     }
 
@@ -152,15 +149,12 @@ fn parse_grid_layout(input: &str) -> ParserResult {
     let mut fixed_values = FixedValues::new();
 
     for (i, part) in parts.iter().enumerate() {
-        match *part {
-            "." => (),
-            _ => {
-                let value = part.parse::<ValueType>().expect("Unparsable number.");
-                if value == 0 || value > num_values as ValueType {
-                    return Err(format!("Value out of range: {value}."));
-                }
-                fixed_values.push((i, CellValue::from_display_value(value)));
+        if *part != "." {
+            let value = part.parse::<ValueType>().expect("Unparsable number.");
+            if value == 0 || value > num_values as ValueType {
+                return Err(format!("Value out of range: {value}."));
             }
+            fixed_values.push((i, CellValue::from_display_value(value)));
         }
     }
 

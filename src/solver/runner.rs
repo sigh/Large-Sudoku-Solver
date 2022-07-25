@@ -66,7 +66,7 @@ impl<VS: ValueSet> Runner<VS> {
 
         let num_cells = constraint.shape.num_cells;
         let handler_set = handlers::make_handlers(constraint);
-        let cell_accumulator = CellAccumulator::new(num_cells, &handler_set.handlers);
+        let cell_accumulator = CellAccumulator::new(num_cells, &handler_set);
 
         let mut cell_order = (0..num_cells).collect::<Vec<_>>();
         if let Some(rng) = &mut config.search_randomizer {
@@ -110,26 +110,20 @@ impl<VS: ValueSet> Runner<VS> {
             for i in 0..num_cells {
                 self.cell_accumulator.add(i);
             }
-            if handlers::enforce_constraints(
-                &mut self.grid_stack[0],
-                &mut self.cell_accumulator,
-                &mut self.handler_set,
-                &mut self.counters,
-            )
-            .is_ok()
-            {
+            if self.enforce_consistency().is_ok() {
                 // Only start the search if we successfully enforced constraints.
 
-                self.rec_stack.push(0);
-
                 // Handle the no guesses case - the initial enforce constraints round should have found everything.
-                if self.config.no_guesses {
-                    if self.skip_fixed_cells(0, 0) != num_cells {
+                let first_cell_index = if self.config.no_guesses {
+                    if self.skip_fixed_cells(0) != num_cells {
                         return None;
                     } else {
-                        self.rec_stack[0] = num_cells;
+                        num_cells
                     }
-                }
+                } else {
+                    0
+                };
+                self.rec_stack.push(first_cell_index);
 
                 new_cell_index = true;
             }
@@ -137,7 +131,7 @@ impl<VS: ValueSet> Runner<VS> {
         }
 
         while let Some(mut cell_index) = self.rec_stack.pop() {
-            let grid_index = self.rec_stack.len();
+            let grid_index = self.grid_index();
 
             // First time we've seen this cell (on this branch).
             if new_cell_index {
@@ -146,7 +140,7 @@ impl<VS: ValueSet> Runner<VS> {
                 // Skip past all the fixed values.
                 // NOTE: We can't have zero values here, as they would have been
                 // rejected in the constraint propogation phase.
-                cell_index = self.skip_fixed_cells(grid_index, cell_index);
+                cell_index = self.skip_fixed_cells(cell_index);
 
                 // We've reached the end, so output a solution!
                 if cell_index == num_cells {
@@ -157,7 +151,7 @@ impl<VS: ValueSet> Runner<VS> {
                 }
 
                 // Find the next cell to explore.
-                self.update_cell_order(grid_index, cell_index);
+                self.update_cell_order(cell_index);
 
                 // Update counters.
                 let count = self.grid_stack[grid_index][self.cell_order[cell_index]].count();
@@ -172,38 +166,26 @@ impl<VS: ValueSet> Runner<VS> {
             // We are trying a new value.
             self.counters.values_tried += 1;
 
-            let grid = if remember_guesses || self.grid_stack[grid_index][cell].has_multiple() {
+            if remember_guesses || self.grid_stack[grid_index][cell].has_multiple() {
                 // There are more values left, so push the current cell onto the
                 // stack and copy the grid to create a new stack frame.
 
                 let v = self.grid_stack[grid_index][cell].pop().unwrap_or_default();
 
-                self.rec_stack.push(cell_index);
-
                 self.counters.guesses += 1;
                 self.progress_metadata
                     .maybe_call_thottled(self.counters.constraints_processed, &self.counters);
 
-                self.push_grid_onto_stack(grid_index);
-                let grid = &mut self.grid_stack[grid_index + 1];
-                // Update the grid with the trial value.
-                grid[cell] = VS::from_value(v);
+                self.push_grid_onto_stack();
+                self.rec_stack.push(cell_index);
 
-                grid
-            } else {
-                // If there are no further values to explore in this cell, then
-                // reuse this stack frame.
-                &mut self.grid_stack[grid_index]
-            };
+                // Update the grid with the trial value.
+                self.grid_stack[grid_index + 1][cell] = VS::from_value(v);
+            }
 
             // Propograte constraints.
             self.cell_accumulator.add(cell);
-            match handlers::enforce_constraints(
-                grid,
-                &mut self.cell_accumulator,
-                &mut self.handler_set,
-                &mut self.counters,
-            ) {
+            match self.enforce_consistency() {
                 Ok(()) => {
                     // Recurse to the new cell.
                     self.rec_stack.push(cell_index + 1);
@@ -223,8 +205,14 @@ impl<VS: ValueSet> Runner<VS> {
         None
     }
 
+    #[inline]
+    fn grid_index(&self) -> usize {
+        self.rec_stack.len()
+    }
+
     // Copy grid from self.grid_stack[grid_index] to self.grid_stack[grid_index+1].
-    fn push_grid_onto_stack(&mut self, grid_index: usize) {
+    fn push_grid_onto_stack(&mut self) {
+        let grid_index = self.grid_index();
         if self.grid_stack.len() == grid_index + 1 {
             // We've run out of space on the stack, so we need to push onto the
             // end.
@@ -247,7 +235,8 @@ impl<VS: ValueSet> Runner<VS> {
         self.backtrack_triggers[cell] += 1;
     }
 
-    fn skip_fixed_cells(&mut self, grid_index: usize, start_cell_index: usize) -> usize {
+    fn skip_fixed_cells(&mut self, start_cell_index: usize) -> usize {
+        let grid_index = self.grid_index();
         let cell_order = &mut self.cell_order;
         let grid = &mut self.grid_stack[grid_index];
 
@@ -266,7 +255,8 @@ impl<VS: ValueSet> Runner<VS> {
 
     // Find the best cell and bring it to the front. This means that it will
     // be processed next.
-    fn update_cell_order(&mut self, grid_index: usize, cell_index: usize) {
+    fn update_cell_order(&mut self, cell_index: usize) {
+        let grid_index = self.grid_index();
         let cell_order = &mut self.cell_order;
         let grid = &mut self.grid_stack[grid_index];
 
@@ -286,6 +276,27 @@ impl<VS: ValueSet> Runner<VS> {
 
         // Swap the best cell into place.
         cell_order.swap(best_index, cell_index);
+    }
+
+    fn enforce_consistency(&mut self) -> Result {
+        let grid_index = self.grid_index();
+        let grid = &mut self.grid_stack[grid_index];
+        let cell_accumulator = &mut self.cell_accumulator;
+
+        while let Some(handler_index) = cell_accumulator.pop() {
+            cell_accumulator.hold(handler_index);
+            self.counters.constraints_processed += 1;
+            self.handler_set
+                .run_handler(handler_index, grid, cell_accumulator)
+                .map_err(|e| {
+                    cell_accumulator.clear();
+                    e
+                })?;
+
+            cell_accumulator.clear_hold();
+        }
+
+        Ok(())
     }
 }
 
