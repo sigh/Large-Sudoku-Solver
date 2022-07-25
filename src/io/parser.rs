@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -35,18 +37,21 @@ pub fn parse_text(input: &str) -> ParserResult {
         });
     }
 
-    let parse_fns: Vec<fn(&str) -> ParserResult> = vec![parse_short_text, parse_grid_layout];
+    let parse_fns = HashMap::from([
+        ("short-format", parse_short_text as fn(_) -> _),
+        ("grid-format", parse_grid_layout),
+    ]);
 
     let mut constraint = None;
-    let mut errors = vec![String::from("Could not parse grid:")];
-    for parse_fn in parse_fns {
+    let mut errors = vec!["Could not parse grid:".to_string()];
+    for (name, parse_fn) in parse_fns {
         match (parse_fn)(&input) {
             Ok(parsed) => {
                 constraint = Some(parsed);
                 break;
             }
             Err(msg) => {
-                errors.push(msg);
+                errors.push(format!("[{}] {}", name, msg));
             }
         }
     }
