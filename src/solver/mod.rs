@@ -148,14 +148,14 @@ fn maybe_call_callback<A, F: FnMut(A)>(f: &mut Option<F>, arg: A) {
 
 pub trait SolutionTrait {
     fn to_fixed_values(&self) -> FixedValues;
-    fn permute(&mut self, num_values: u16, rng: &mut RngType);
+    fn permute<R: rand::Rng>(&mut self, num_values: u16, rng: &mut R);
 }
 impl SolutionTrait for Solution {
     fn to_fixed_values(&self) -> FixedValues {
         self.iter().copied().enumerate().collect::<FixedValues>()
     }
 
-    fn permute(&mut self, num_values: u16, rng: &mut RngType) {
+    fn permute<R: rand::Rng>(&mut self, num_values: u16, rng: &mut R) {
         let mut permutation = (0..num_values).collect::<Vec<_>>();
         permutation.shuffle(rng);
         for v in self {
