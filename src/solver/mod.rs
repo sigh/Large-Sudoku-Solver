@@ -4,14 +4,9 @@ mod engine;
 mod handlers;
 
 use crate::types::{CellValue, Constraint, FixedValues, RngType, Solution};
-use crate::value_set::IntBitSet;
-#[cfg(not(feature = "i64_value_set"))]
-use crate::value_set::RecValueSet;
-
-use engine::Engine;
 use rand::prelude::SliceRandom;
 
-pub const VALID_NUM_VALUE_RANGE: std::ops::RangeInclusive<u32> = 2..=512;
+pub const VALID_NUM_VALUE_RANGE: std::ops::RangeInclusive<u32> = engine::VALID_NUM_VALUE_RANGE;
 
 pub type ProgressCallback = dyn FnMut(&Counters);
 pub type MinimizerProgressCallback = dyn FnMut(&MinimizerCounters);
@@ -55,42 +50,31 @@ pub enum Output {
     Empty,
 }
 
-pub trait SolutionIter: Iterator<Item = Output> {
-    fn reset_fixed_values(&mut self, fixed_values: &FixedValues);
+pub struct Solutions {
+    runner: Box<dyn engine::Runner>,
+}
+impl Iterator for Solutions {
+    type Item = Output;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.runner.next()
+    }
 }
 
-pub fn solution_iter(constraint: &Constraint, config: Config) -> Box<dyn SolutionIter> {
-    match constraint.shape.num_values {
-        #[cfg(not(feature = "i64_value_set"))]
-        2..=32 => Box::new(Engine::<IntBitSet<i32>>::new(constraint, config)),
-        #[cfg(not(feature = "i64_value_set"))]
-        33..=64 => Box::new(Engine::<IntBitSet<i64>>::new(constraint, config)),
-        #[cfg(feature = "i64_value_set")]
-        2..=64 => Box::new(Engine::<IntBitSet<i64>>::new(constraint, config)),
-        #[cfg(not(feature = "i64_value_set"))]
-        65..=128 => Box::new(Engine::<IntBitSet<i128>>::new(constraint, config)),
-        #[cfg(not(feature = "i64_value_set"))]
-        129..=256 => Box::new(Engine::<RecValueSet<IntBitSet<i128>>>::new(
-            constraint, config,
-        )),
-        #[cfg(not(feature = "i64_value_set"))]
-        257..=512 => Box::new(Engine::<RecValueSet<RecValueSet<IntBitSet<i128>>>>::new(
-            constraint, config,
-        )),
-        _ => panic!(
-            "Grid too large. num_values: {}",
-            constraint.shape.num_values
-        ),
-    }
+pub fn solution_iter(constraint: &Constraint, config: Config) -> Solutions {
+    return Solutions {
+        runner: engine::make_runner(constraint, config),
+    };
 }
 
 pub fn minimize(
     constraint: &Constraint,
-    config: Config,
+    mut config: Config,
     progress_callback: Option<Box<MinimizerProgressCallback>>,
 ) -> Box<dyn Iterator<Item = FixedValues>> {
+    config.output_type = OutputType::Empty;
     Box::new(Minimizer {
-        runner: solution_iter(constraint, config),
+        runner: engine::make_runner(constraint, config),
         remaining_values: constraint.fixed_values.clone(),
         required_values: Vec::new(),
         progress_callback,
@@ -99,7 +83,7 @@ pub fn minimize(
 }
 
 struct Minimizer {
-    runner: Box<dyn SolutionIter>,
+    runner: Box<dyn engine::Runner>,
     remaining_values: FixedValues,
     required_values: FixedValues,
     progress_callback: Option<Box<MinimizerProgressCallback>>,

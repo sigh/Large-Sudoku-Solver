@@ -1,14 +1,50 @@
-use crate::types::{CellIndex, CellValue, Constraint, FixedValues, ValueType};
-use crate::value_set::ValueSet;
 use rand::prelude::SliceRandom;
 
+use crate::types::{CellIndex, CellValue, Constraint, FixedValues, ValueType};
+#[cfg(not(feature = "i64_value_set"))]
+use crate::value_set::RecValueSet;
+use crate::value_set::{IntBitSet, ValueSet};
+
 use super::cell_accumulator::CellAccumulator;
-use super::{handlers, SolutionIter};
+use super::handlers;
 use super::{Config, Counters, Output, OutputType, ProgressCallback};
+
+pub trait Runner {
+    fn reset_fixed_values(&mut self, fixed_values: &FixedValues);
+
+    fn next(&mut self) -> Option<Output>;
+}
+
+pub const VALID_NUM_VALUE_RANGE: std::ops::RangeInclusive<u32> = 2..=512;
+
+pub fn make_runner(constraint: &Constraint, config: Config) -> Box<dyn Runner> {
+    match constraint.shape.num_values {
+        #[cfg(not(feature = "i64_value_set"))]
+        2..=32 => Box::new(Engine::<IntBitSet<i32>>::new(constraint, config)),
+        #[cfg(not(feature = "i64_value_set"))]
+        33..=64 => Box::new(Engine::<IntBitSet<i64>>::new(constraint, config)),
+        #[cfg(feature = "i64_value_set")]
+        2..=64 => Box::new(Engine::<IntBitSet<i64>>::new(constraint, config)),
+        #[cfg(not(feature = "i64_value_set"))]
+        65..=128 => Box::new(Engine::<IntBitSet<i128>>::new(constraint, config)),
+        #[cfg(not(feature = "i64_value_set"))]
+        129..=256 => Box::new(Engine::<RecValueSet<IntBitSet<i128>>>::new(
+            constraint, config,
+        )),
+        #[cfg(not(feature = "i64_value_set"))]
+        257..=512 => Box::new(Engine::<RecValueSet<RecValueSet<IntBitSet<i128>>>>::new(
+            constraint, config,
+        )),
+        _ => panic!(
+            "Grid too large. num_values: {}",
+            constraint.shape.num_values
+        ),
+    }
+}
 
 type Grid<VS> = Vec<VS>;
 
-pub struct Engine<VS: ValueSet> {
+struct Engine<VS: ValueSet> {
     started: bool,
     cell_order: Vec<CellIndex>,
     rec_stack: Vec<usize>,
@@ -21,40 +57,6 @@ pub struct Engine<VS: ValueSet> {
     progress_ratio_stack: Vec<f64>,
     counters: Counters,
     config: Config,
-}
-
-impl<VS: ValueSet> Iterator for Engine<VS> {
-    type Item = Output;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let grid_to_solution = |grid: &Grid<VS>| {
-            grid.iter()
-                .map(|vs| {
-                    CellValue::from_index(
-                        vs.value()
-                            .unwrap_or_else(|| panic!("Bad ValueSet in solution: {:?}", vs))
-                            as ValueType,
-                    )
-                })
-                .collect::<Vec<_>>()
-        };
-
-        match self.config.output_type {
-            OutputType::Empty => self.run().map(|_| Output::Empty),
-
-            OutputType::Solution => self.run().map(grid_to_solution).map(Output::Solution),
-
-            OutputType::Guesses => self.run().map(grid_to_solution).map(|solution| {
-                Output::Guesses(
-                    self.rec_stack
-                        .iter()
-                        .map(|i| self.cell_order[*i])
-                        .map(|c| (c, solution[c]))
-                        .collect(),
-                )
-            }),
-        }
-    }
 }
 
 impl<VS: ValueSet> Engine<VS> {
@@ -297,7 +299,7 @@ impl<VS: ValueSet> Engine<VS> {
     }
 }
 
-impl<VS: ValueSet> super::SolutionIter for Engine<VS> {
+impl<VS: ValueSet> Runner for Engine<VS> {
     fn reset_fixed_values(&mut self, fixed_values: &FixedValues) {
         self.started = false;
         self.rec_stack.clear();
@@ -309,6 +311,36 @@ impl<VS: ValueSet> super::SolutionIter for Engine<VS> {
         // Both of these counters are confusing when aggregated.
         self.counters.progress_ratio = 0.0;
         self.counters.solutions = 0;
+    }
+
+    fn next(&mut self) -> Option<Output> {
+        let grid_to_solution = |grid: &Grid<VS>| {
+            grid.iter()
+                .map(|vs| {
+                    CellValue::from_index(
+                        vs.value()
+                            .unwrap_or_else(|| panic!("Bad ValueSet in solution: {:?}", vs))
+                            as ValueType,
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+
+        match self.config.output_type {
+            OutputType::Empty => self.run().map(|_| Output::Empty),
+
+            OutputType::Solution => self.run().map(grid_to_solution).map(Output::Solution),
+
+            OutputType::Guesses => self.run().map(grid_to_solution).map(|solution| {
+                Output::Guesses(
+                    self.rec_stack
+                        .iter()
+                        .map(|i| self.cell_order[*i])
+                        .map(|c| (c, solution[c]))
+                        .collect(),
+                )
+            }),
+        }
     }
 }
 
