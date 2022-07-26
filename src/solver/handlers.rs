@@ -5,8 +5,8 @@ use crate::value_set::ValueSet;
 
 use super::all_different::AllDifferentEnforcer;
 use super::cell_accumulator::{CellAccumulator, CellContainer};
-use super::runner;
-use super::runner::Contradition;
+use super::engine;
+use super::engine::Contradition;
 
 pub struct HouseHandler<VS> {
     cells: Vec<CellIndex>,
@@ -30,7 +30,7 @@ impl<VS: ValueSet> HouseHandler<VS> {
         grid: &mut [VS],
         cell_accumulator: &mut CellAccumulator,
         all_diff_enforcer: &mut AllDifferentEnforcer<VS>,
-    ) -> runner::Result {
+    ) -> engine::Result {
         let mut all_values = VS::empty();
         // Counts the number of cells with only a single values.
         let mut num_fixed = 0;
@@ -84,7 +84,7 @@ impl SameValueHandler {
         &self,
         grid: &mut [VS],
         cell_accumulator: &mut CellAccumulator,
-    ) -> runner::Result {
+    ) -> engine::Result {
         // Find the values in each cell set.
         let values0 = self
             .cells0
@@ -125,7 +125,7 @@ impl SameValueHandler {
         allowed_values: &VS,
         cells: &[CellIndex],
         cell_accumulator: &mut CellAccumulator,
-    ) -> runner::Result {
+    ) -> engine::Result {
         for &c0 in cells {
             let v = grid[c0].intersection(allowed_values);
             if v.is_empty() {
@@ -176,7 +176,7 @@ impl<VS: ValueSet> HandlerSet<VS> {
         index: usize,
         grid: &mut [VS],
         cell_accumulator: &mut CellAccumulator,
-    ) -> runner::Result {
+    ) -> engine::Result {
         match &mut self.handlers[index] {
             ConstraintHandler::House(h) => {
                 h.enforce_consistency(grid, cell_accumulator, &mut self.all_diff_enforcer)

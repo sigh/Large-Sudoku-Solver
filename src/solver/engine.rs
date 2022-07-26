@@ -11,7 +11,7 @@ pub type Result = std::result::Result<(), Contradition>;
 
 type Grid<V> = Vec<V>;
 
-pub struct Runner<VS: ValueSet> {
+pub struct Engine<VS: ValueSet> {
     started: bool,
     cell_order: Vec<CellIndex>,
     rec_stack: Vec<usize>,
@@ -26,7 +26,7 @@ pub struct Runner<VS: ValueSet> {
     config: Config,
 }
 
-impl<VS: ValueSet> Iterator for Runner<VS> {
+impl<VS: ValueSet> Iterator for Engine<VS> {
     type Item = Output;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -60,7 +60,7 @@ impl<VS: ValueSet> Iterator for Runner<VS> {
     }
 }
 
-impl<VS: ValueSet> Runner<VS> {
+impl<VS: ValueSet> Engine<VS> {
     pub fn new(constraint: &Constraint, mut config: Config) -> Self {
         assert!(constraint.shape.num_values <= VS::BITS as u32);
 
@@ -300,7 +300,7 @@ impl<VS: ValueSet> Runner<VS> {
     }
 }
 
-impl<VS: ValueSet> super::SolutionIter for Runner<VS> {
+impl<VS: ValueSet> super::SolutionIter for Engine<VS> {
     fn reset_fixed_values(&mut self, fixed_values: &FixedValues) {
         self.started = false;
         self.rec_stack.clear();

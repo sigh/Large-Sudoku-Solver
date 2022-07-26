@@ -1,15 +1,15 @@
 pub mod all_different;
 mod cell_accumulator;
+mod engine;
 mod handlers;
-mod runner;
 
 use crate::types::{CellValue, Constraint, FixedValues, RngType, Solution};
 use crate::value_set::IntBitSet;
 #[cfg(not(feature = "i64_value_set"))]
 use crate::value_set::RecValueSet;
 
+use engine::Engine;
 use rand::prelude::SliceRandom;
-use runner::Runner;
 
 pub const VALID_NUM_VALUE_RANGE: std::ops::RangeInclusive<u32> = 2..=512;
 
@@ -62,19 +62,19 @@ pub trait SolutionIter: Iterator<Item = Output> {
 pub fn solution_iter(constraint: &Constraint, config: Config) -> Box<dyn SolutionIter> {
     match constraint.shape.num_values {
         #[cfg(not(feature = "i64_value_set"))]
-        2..=32 => Box::new(Runner::<IntBitSet<i32>>::new(constraint, config)),
+        2..=32 => Box::new(Engine::<IntBitSet<i32>>::new(constraint, config)),
         #[cfg(not(feature = "i64_value_set"))]
-        33..=64 => Box::new(Runner::<IntBitSet<i64>>::new(constraint, config)),
+        33..=64 => Box::new(Engine::<IntBitSet<i64>>::new(constraint, config)),
         #[cfg(feature = "i64_value_set")]
-        2..=64 => Box::new(Runner::<IntBitSet<i64>>::new(constraint, config)),
+        2..=64 => Box::new(Engine::<IntBitSet<i64>>::new(constraint, config)),
         #[cfg(not(feature = "i64_value_set"))]
-        65..=128 => Box::new(Runner::<IntBitSet<i128>>::new(constraint, config)),
+        65..=128 => Box::new(Engine::<IntBitSet<i128>>::new(constraint, config)),
         #[cfg(not(feature = "i64_value_set"))]
-        129..=256 => Box::new(Runner::<RecValueSet<IntBitSet<i128>>>::new(
+        129..=256 => Box::new(Engine::<RecValueSet<IntBitSet<i128>>>::new(
             constraint, config,
         )),
         #[cfg(not(feature = "i64_value_set"))]
-        257..=512 => Box::new(Runner::<RecValueSet<RecValueSet<IntBitSet<i128>>>>::new(
+        257..=512 => Box::new(Engine::<RecValueSet<RecValueSet<IntBitSet<i128>>>>::new(
             constraint, config,
         )),
         _ => panic!(
