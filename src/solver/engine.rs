@@ -6,10 +6,7 @@ use super::cell_accumulator::CellAccumulator;
 use super::{handlers, SolutionIter};
 use super::{Config, Counters, Output, OutputType, ProgressCallback};
 
-pub struct Contradition;
-pub type Result = std::result::Result<(), Contradition>;
-
-type Grid<V> = Vec<V>;
+type Grid<VS> = Vec<VS>;
 
 pub struct Engine<VS: ValueSet> {
     started: bool,
@@ -191,7 +188,7 @@ impl<VS: ValueSet> Engine<VS> {
                     self.rec_stack.push(cell_index + 1);
                     new_cell_index = true;
                 }
-                Err(Contradition) => {
+                Err(handlers::Contradition) => {
                     // Backtrack.
                     self.counters.progress_ratio += progress_delta;
                     self.record_backtrack(cell);
@@ -278,7 +275,7 @@ impl<VS: ValueSet> Engine<VS> {
         cell_order.swap(best_index, cell_index);
     }
 
-    fn enforce_consistency(&mut self) -> Result {
+    fn enforce_consistency(&mut self) -> handlers::Result {
         let grid_index = self.grid_index();
         let grid = &mut self.grid_stack[grid_index];
         let cell_accumulator = &mut self.cell_accumulator;

@@ -4,8 +4,8 @@ use crate::types::{CellIndex, ValueType};
 use crate::value_set::ValueSet;
 
 use super::cell_accumulator::CellAccumulator;
-use super::engine;
-use super::engine::Contradition;
+use super::handlers;
+use super::handlers::Contradition;
 
 pub struct AllDifferentEnforcer<VS: ValueSet> {
     assignees: Vec<usize>,
@@ -59,7 +59,7 @@ impl<VS: ValueSet> AllDifferentEnforcer<VS> {
         cells: &[CellIndex],
         candidate_matching: &mut [VS],
         cell_accumulator: &mut CellAccumulator,
-    ) -> engine::Result {
+    ) -> handlers::Result {
         self.enforce_all_different_internal(grid, cells, candidate_matching)?;
 
         // Remove the remaining edges as they are impossible assignments.
@@ -79,7 +79,7 @@ impl<VS: ValueSet> AllDifferentEnforcer<VS> {
         grid: &[VS],
         cells: &[CellIndex],
         candidate_matching: &mut [VS],
-    ) -> engine::Result {
+    ) -> handlers::Result {
         // Copy over the cell values.
         for (i, &cell) in cells.iter().enumerate() {
             self.cell_nodes[i] = grid[cell];
@@ -233,7 +233,7 @@ impl<VS: ValueSet> AllDifferentEnforcer<VS> {
     // Implementation of the Ford–Fulkerson algorithm method.
     // https://en.wikipedia.org/wiki/Ford%E2%80%93Fulkerson_algorithm
     // See also https://www.geeksforgeeks.org/maximum-bipartite-matching/
-    fn max_matching(&mut self, candidate_matching: &mut [VS]) -> engine::Result {
+    fn max_matching(&mut self, candidate_matching: &mut [VS]) -> handlers::Result {
         let num_cells = self.cell_nodes.len();
 
         let mut assigned_values = VS::empty();
