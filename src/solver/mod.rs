@@ -34,6 +34,7 @@ pub struct Counters {
 pub struct MinimizerCounters {
     pub cells_tried: u64,
     pub cells_removed: u64,
+    pub solver_counters: Counters,
 }
 
 #[derive(Default, PartialEq)]

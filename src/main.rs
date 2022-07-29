@@ -21,7 +21,14 @@ fn run_solver(
     output::with_progress_bar(SCALE, |bar| {
         config.progress_callback = Some(Box::new(move |counters: &solver::Counters| {
             bar.set_position((counters.progress_ratio * (SCALE as f64)) as u64);
-            bar.set_message(output::counters(counters));
+            bar.set_message(format!(
+                "{{ solutions: {} guesses: {} values_tried: {} constraints_processed: {} progress_ratio: {} }}",
+                counters.solutions,
+                counters.guesses,
+                counters.values_tried,
+                counters.constraints_processed,
+                counters.progress_ratio
+            ));
         }));
 
         for solution in solver::solution_iter(constraint, config).take(num_solutions) {
@@ -44,10 +51,18 @@ fn run_minimizer(
 ) -> Result<(), String> {
     constraint.fixed_values.shuffle(&mut rng);
 
-    output::with_progress_bar(constraint.fixed_values.len() as u64, |bar| {
+    let num_fixed_values = constraint.fixed_values.len();
+    output::with_progress_bar(num_fixed_values as u64, |bar| {
         let progress_callback = Box::new(move |counters: &solver::MinimizerCounters| {
             bar.set_position(counters.cells_tried);
-            bar.set_message(format!("{:?}", counters));
+            bar.set_message(format!(
+                "{{ progress: {}/{} cells cells_removed: {} total_guesses: {} }} {{ solver_progress: {} }}",
+                counters.cells_tried,
+                num_fixed_values,
+                counters.cells_removed,
+                counters.solver_counters.guesses,
+                counters.solver_counters.progress_ratio
+            ));
         });
 
         let config = solver::Config {

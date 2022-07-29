@@ -70,13 +70,6 @@ pub fn solution_compact(solution: &types::Solution) -> String {
     )
 }
 
-pub fn counters(counters: &solver::Counters) -> String {
-    format!(
-        "{{ solutions: {} guesses: {} values_tried: {} constraints_processed: {} progress_ratio: {} }}",
-        counters.solutions, counters.guesses, counters.values_tried, counters.constraints_processed, counters.progress_ratio
-    )
-}
-
 pub fn with_progress_bar<F: FnOnce(Rc<ProgressBar>)>(scale: u64, f: F) {
     let bar = Rc::new(ProgressBar::new(scale));
     bar.set_style(
