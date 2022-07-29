@@ -7,7 +7,7 @@ A solver for large sudoku grids (up to 512x512). Also solves Sudoku-X puzzles.
 Requires [rust](https://www.rust-lang.org/tools/install) to compile and run:
 
 ```shell
-cargo run --release <input_filename>
+cargo run --release solve <input_filename>
 ```
 
 ## Algorithm
