@@ -3,8 +3,7 @@ mod cell_accumulator;
 mod engine;
 mod handlers;
 
-use crate::types::{CellValue, Constraint, FixedValues, RngType, Solution};
-use rand::prelude::SliceRandom;
+use crate::types::{Constraint, FixedValues, RngType, Solution};
 
 pub const VALID_NUM_VALUE_RANGE: std::ops::RangeInclusive<u32> = engine::VALID_NUM_VALUE_RANGE;
 
@@ -127,23 +126,5 @@ impl Iterator for Minimizer {
 fn maybe_call_callback<A, F: FnMut(A)>(f: &mut Option<F>, arg: A) {
     if let Some(f) = f {
         (f)(arg);
-    }
-}
-
-pub trait SolutionTrait {
-    fn to_fixed_values(&self) -> FixedValues;
-    fn permute<R: rand::Rng>(&mut self, num_values: u16, rng: &mut R);
-}
-impl SolutionTrait for Solution {
-    fn to_fixed_values(&self) -> FixedValues {
-        self.iter().copied().enumerate().collect::<FixedValues>()
-    }
-
-    fn permute<R: rand::Rng>(&mut self, num_values: u16, rng: &mut R) {
-        let mut permutation = (0..num_values).collect::<Vec<_>>();
-        permutation.shuffle(rng);
-        for v in self {
-            *v = CellValue::from_index(permutation[v.index() as usize]);
-        }
     }
 }
