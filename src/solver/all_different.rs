@@ -80,6 +80,11 @@ impl<VS: ValueSet> AllDifferentEnforcer<VS> {
         cells: &[CellIndex],
         candidate_matching: &mut [VS],
     ) -> handlers::Result {
+        println!("Initial state: ");
+        for (i, &cell) in cells.iter().enumerate() {
+            println!("  {}: {:?}", i, grid[cell].values());
+        }
+
         // Copy over the cell values.
         for (i, &cell) in cells.iter().enumerate() {
             self.cell_nodes[i] = grid[cell];
@@ -121,6 +126,7 @@ impl<VS: ValueSet> AllDifferentEnforcer<VS> {
         let full_set = VS::full(cell_nodes.len() as ValueType);
         let mut unseen_cells = full_set;
         let mut unseen_values = full_set;
+        let mut used_values = VS::empty();
 
         while let Some(i) = unseen_cells.pop() {
             // Try the next unseen node.
@@ -208,6 +214,7 @@ impl<VS: ValueSet> AllDifferentEnforcer<VS> {
                     // Remove the edges and truncate the stack.
                     let mask = scc_set_u.values;
                     stack_cell_values.remove_set(&mask);
+                    used_values.add_set(&mask);
 
                     // We know exactly how many cells are in this scc.
                     // NOTE: count seem more efficient than searching for
@@ -215,7 +222,28 @@ impl<VS: ValueSet> AllDifferentEnforcer<VS> {
                     let set_size = scc_set_u.values.count();
                     let remaining_size = scc_stack.len() - set_size;
 
+                    let scc_cells = &scc_stack[remaining_size..];
+                    print!("Found SCC - Values: {:?} Cells: {:?}", mask, scc_cells);
+                    // If any of the cells in the scc have values not in the
+                    // mask, we have a hidden tuple.
+                    if scc_cells
+                        .iter()
+                        .any(|&w| !cell_nodes[w].without(&used_values).is_empty())
+                    {
+                        print!(" (hidden tuple)");
+                        print!(" {:?}", &used_values);
+                    }
+                    // If any cells not in scc_cells contain values in mask, we
+                    // have a naked tuple.
+                    if cell_nodes.iter().enumerate().any(|(i, &cell)| {
+                        !scc_cells.contains(&i) && !cell.intersection(&mask).is_empty()
+                    }) {
+                        print!(" (naked tuple)");
+                    }
+                    println!();
+
                     for w in scc_stack.drain(remaining_size..) {
+                        // let removed = cell_nodes[w].intersection(&mask);
                         cell_nodes[w].remove_set(&mask);
                     }
                     stack_state = StackState::NoResult;
@@ -331,5 +359,85 @@ impl<VS: ValueSet> AllDifferentEnforcer<VS> {
         }
 
         Err(Contradition)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::value_set::IntBitSet;
+
+    type ValueSetType = IntBitSet<i64>;
+    const NUM_VALUES: usize = 9;
+
+    fn run_enforcer(grid: &[ValueSetType]) -> handlers::Result {
+        let cells: Vec<CellIndex> = (0..NUM_VALUES).collect::<Vec<CellIndex>>();
+        let mut candidates = vec![ValueSetType::empty(); NUM_VALUES];
+        let mut enforcer = AllDifferentEnforcer::new(NUM_VALUES as u32);
+        return enforcer.enforce_all_different_internal(&grid, &cells, &mut candidates);
+    }
+
+    fn make_grid() -> Vec<ValueSetType> {
+        let full_set: ValueSetType = ValueSetType::full(NUM_VALUES as ValueType);
+        let mut grid = vec![ValueSetType::empty(); NUM_VALUES];
+        grid.fill(full_set);
+
+        return grid;
+    }
+
+    #[test]
+    fn all_values() {
+        let grid = make_grid();
+        let _ = run_enforcer(&grid);
+    }
+
+    #[test]
+    fn partial() {
+        let mut grid = make_grid();
+        grid[5] = ValueSetType::from_iter([0, 1]);
+        grid[7] = ValueSetType::from_iter([0, 1]);
+
+        let _ = run_enforcer(&grid);
+    }
+
+    #[test]
+    fn progressive() {
+        let mut grid = make_grid();
+        grid[0] = ValueSetType::from_iter([1]);
+        grid[1] = ValueSetType::from_iter([1, 2]);
+        grid[2] = ValueSetType::from_iter([2, 3]);
+        grid[3] = ValueSetType::from_iter([3, 4]);
+
+        let _ = run_enforcer(&grid);
+    }
+
+    #[test]
+    fn hidden_tuple() {
+        let mut grid = make_grid();
+        grid[2] = ValueSetType::from_iter(2..9);
+        grid[3] = ValueSetType::from_iter(2..9);
+        grid[4] = ValueSetType::from_iter(2..9);
+        grid[5] = ValueSetType::from_iter(2..9);
+        grid[6] = ValueSetType::from_iter(2..9);
+        grid[7] = ValueSetType::from_iter(2..9);
+        grid[8] = ValueSetType::from_iter(2..9);
+
+        let _ = run_enforcer(&grid);
+    }
+
+    #[test]
+    fn disjoint() {
+        let mut grid = make_grid();
+        grid[0] = ValueSetType::from_iter(0..4);
+        grid[1] = ValueSetType::from_iter(0..4);
+        grid[2] = ValueSetType::from_iter(0..4);
+        grid[3] = ValueSetType::from_iter(0..4);
+        grid[4] = ValueSetType::from_iter(4..9);
+        grid[5] = ValueSetType::from_iter(4..9);
+        grid[6] = ValueSetType::from_iter(4..9);
+        grid[7] = ValueSetType::from_iter(4..9);
+        grid[8] = ValueSetType::from_iter(4..9);
+
+        let _ = run_enforcer(&grid);
     }
 }
